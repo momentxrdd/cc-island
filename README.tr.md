@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" width="480" alt="CC Island logosu">
+  <img src="assets/logo.svg" width="150" alt="CC Island logosu">
 </p>
 
 <p align="center">

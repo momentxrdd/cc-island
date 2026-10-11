@@ -1,12 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" role="img" aria-labelledby="t">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="250 52 140 116" role="img" aria-labelledby="t">
   <title id="t">CC Island</title>
-  <!-- Dynamic Island capsule: 420 x 96, centered on the canvas -->
-  <rect x="110" y="62" width="420" height="96" rx="48" fill="#000"/>
-  <rect x="110.5" y="62.5" width="419" height="95" rx="47.5" fill="none" stroke="#ffffff" stroke-opacity=".08"/>
-  <!-- Claude Code mascot (from assets/claude-code.svg), scaled so its visible height is ~48px -->
-  <g transform="translate(150 70) scale(3.2)">
+  <!-- Dynamic Island capsule: 120 x 96, centered on (320, 110) -->
+  <rect x="260" y="62" width="120" height="96" rx="48" fill="#000"/>
+  <rect x="260.5" y="62.5" width="119" height="95" rx="47.5" fill="none" stroke="#ffffff" stroke-opacity=".08"/>
+  <!-- Claude Code mascot (from assets/claude-code.svg), scaled 3.2x and centered in the capsule -->
+  <g transform="translate(281.6 70) scale(3.2)">
     <path fill="#D97757" fill-rule="evenodd" clip-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/>
   </g>
-  <!-- wordmark: left edge 252, ends near 490, leaving the same 40px inner padding as the mascot side -->
-  <text x="252" y="128" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="44" font-weight="700" letter-spacing="-0.5">CC Island</text>
 </svg>
