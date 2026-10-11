@@ -4,7 +4,7 @@
   "description": "A Dynamic Island-style Windows overlay for Claude Code sessions: live status, permission approvals, and Spotify controls.",
   "main": "main.js",
   "license": "MIT",
-  "author": "CC Island contributors",
+  "author": "moment",
   "keywords": [
     "claude",
     "claude-code",
