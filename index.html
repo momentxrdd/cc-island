@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
+<title>CC Island</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="island.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="island" role="group" aria-label="Claude Code Dynamic Island" aria-expanded="false">
+    <div class="view compact" data-view="compact"></div>
+    <div class="view overlay" data-view="overlay" aria-live="polite"></div>
+    <div class="view peek" data-view="peek"></div>
+    <div class="view full" data-view="full">
+      <div class="fbar" data-toggle role="button" tabindex="0" data-i18n-aria="ui.aria.collapse" aria-label="Collapse">
+        <span class="fb-l" id="fbL"></span>
+        <span class="ibtn" data-toggle data-i18n-title="ui.aria.collapse" title="Collapse" id="fbX"></span>
+      </div>
+      <div id="full"></div>
+    </div>
+  </div>
+</div>
+<script src="i18n.js"></script>
+<script src="icons.js"></script>
+<script src="island.js"></script>
+<script src="renderer.js"></script>
+</body>
+</html>

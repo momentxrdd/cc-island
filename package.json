@@ -1,0 +1,40 @@
+{
+  "name": "cc-island",
+  "version": "1.0.0",
+  "description": "A Dynamic Island-style Windows overlay for Claude Code sessions: live status, permission approvals, and Spotify controls.",
+  "main": "main.js",
+  "license": "MIT",
+  "author": "CC Island contributors",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "dynamic-island",
+    "electron",
+    "windows",
+    "overlay",
+    "spotify"
+  ],
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "assets",
+    "*.js",
+    "*.ps1",
+    "*.html",
+    "*.css",
+    "tray.png"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "install-hooks": "node install-hooks.js",
+    "uninstall-hooks": "node install-hooks.js --remove",
+    "make-tray": "node make-tray.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

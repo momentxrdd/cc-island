@@ -1,0 +1,15 @@
+# dependencies
+node_modules/
+
+# local settings and hook backups (contain your ~/.claude/settings.json copy)
+*.ccisland.bak
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# logs
+*.log
+npm-debug.log*
