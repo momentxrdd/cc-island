@@ -3,7 +3,9 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.0.0] - 2026-10-15
+
+First public release.
 
 ### Added
 - English and Turkish interface. Language follows the system locale by default and can be changed from the tray menu.
@@ -13,7 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Spotify now-playing card with album art, progress bar, seek and playback controls (read through Windows media controls).
 - Auto-launch when a Claude Code session starts, and auto-quit after sessions end.
 - Reduced-motion support, with an animation setting in the tray menu.
+- Portable Windows build (`npm run build`) published on the Releases page.
 
-## [1.0.0]
-
-- First working prototype: session status, Claude Code hook integration, and a Dynamic Island-style overlay.
+### Fixed
+- Permission buttons no longer clip their labels in narrow overlays.
+- Auto-launch works from the packaged build (the app records its own executable path for the hooks).

@@ -16,6 +16,21 @@
 
 ---
 
+## Ekran görüntüleri
+
+> Ekran görüntülerinde örnek veriler kullanılmıştır.
+
+<table>
+  <tr>
+    <td align="center"><img src="assets/screenshots/compact.png" width="330" alt="Kapsülde çalışan oturum"><br><sub>Kapsülde çalışan oturum</sub></td>
+    <td align="center"><img src="assets/screenshots/peek.png" width="330" alt="Tüm oturumların hover listesi"><br><sub>Tüm oturumların hover listesi</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/screenshots/permission.png" width="330" alt="Onay / reddet ile izin isteği"><br><sub>Onay / reddet ile izin isteği</sub></td>
+    <td align="center"><img src="assets/screenshots/full.png" width="330" alt="Diff ve görevlerle tam görünüm"><br><sub>Diff ve görevlerle tam görünüm</sub></td>
+  </tr>
+</table>
+
 ## Özellikler
 
 - **Canlı oturum durumu.** Her Claude Code oturumu proje adı, durumu (çalışıyor, onay bekliyor, bitti) ve o an çalıştırdığı araçla listelenir.
@@ -36,8 +51,11 @@
 
 ## Kurulum
 
+Hazır Windows sürümü: [Releases](https://github.com/momentxrdd/cc-island/releases/latest). Zip dosyasını açıp `CC Island.exe` ile çalıştır, ardından aşağıda anlatıldığı gibi hook'ları kur (hook'lar için [Node.js](https://nodejs.org/) gerekir).
+
+
 ```bash
-git clone https://github.com/<hesabın>/cc-island.git
+git clone https://github.com/momentxrdd/cc-island.git
 cd cc-island
 npm install
 npm run install-hooks

@@ -32,7 +32,8 @@
     "start": "electron .",
     "install-hooks": "node install-hooks.js",
     "uninstall-hooks": "node install-hooks.js --remove",
-    "make-tray": "node make-tray.js"
+    "make-tray": "node make-tray.js",
+    "build": "node scripts/build-win.js"
   },
   "devDependencies": {
     "electron": "^33.0.0"

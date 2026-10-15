@@ -27,6 +27,15 @@ let settings = { motion: 'on', lang: 'auto' }; // lang: 'auto' | 'en' | 'tr'
 const T = (key, vars) => I18N.t(key, vars);
 function syncLang() { I18N.setLang(I18N.resolve(settings.lang, app.getLocale())); }
 const settingsPayload = () => ({ ...settings, lang: I18N.lang });
+// hook.js reads this to relaunch the app the same way it was started (dev or packaged build)
+function writeLaunchTarget() {
+  const target = { exe: process.execPath, args: app.isPackaged ? [] : [app.getAppPath()] };
+  try {
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.writeFileSync(path.join(app.getPath('userData'), 'launch.json'), JSON.stringify(target));
+  } catch {}
+}
+
 function loadSettings() {
   try { settings = { ...settings, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) }; } catch {}
   syncLang();
@@ -403,6 +412,7 @@ function trayMenu() {
 app.whenReady().then(() => {
   if (!app.requestSingleInstanceLock()) return app.quit();
   loadSettings();
+  writeLaunchTarget();
   startServer();
   createWindow();
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'tray.png')));

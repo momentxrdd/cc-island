@@ -91,9 +91,8 @@
 @keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
 .ov.k-success .t1 { color: #fff; }
 .ov-ac { display: flex; gap: 7px; margin-top: 10px; padding-left: 56px; }
-.ov-ac button { padding: 7px 12px; font-size: 12.5px; border-radius: 12px; }
-.ov-ac .sq { padding: 7px 9px; flex: none; }
-.ov-ac .b-allow, .ov-ac .b-deny { flex: 1; }
+.ov-ac button { padding: 7px 10px; font-size: 12.5px; border-radius: 12px; flex: 1 1 0; min-width: 0; justify-content: center; white-space: nowrap; }
+.ov-ac .sq { padding: 7px 9px; flex: 0 0 auto; }
 
 /* ----- peek ----- */
 .pk { padding: 12px 12px 12px; }

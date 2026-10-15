@@ -16,6 +16,21 @@
 
 ---
 
+## Screenshots
+
+> Screenshots use sample data.
+
+<table>
+  <tr>
+    <td align="center"><img src="assets/screenshots/compact.png" width="330" alt="Working session in the capsule"><br><sub>Working session in the capsule</sub></td>
+    <td align="center"><img src="assets/screenshots/peek.png" width="330" alt="Hover list of all sessions"><br><sub>Hover list of all sessions</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/screenshots/permission.png" width="330" alt="Permission request with approve / deny"><br><sub>Permission request with approve / deny</sub></td>
+    <td align="center"><img src="assets/screenshots/full.png" width="330" alt="Full view with diffs and tasks"><br><sub>Full view with diffs and tasks</sub></td>
+  </tr>
+</table>
+
 ## Features
 
 - **Live session status.** Each Claude Code session is listed with its project name, state (working, awaiting approval, done) and the tool it is running right now.
@@ -36,8 +51,11 @@
 
 ## Installation
 
+Prebuilt Windows download: [Releases](https://github.com/momentxrdd/cc-island/releases/latest). Unzip it, run `CC Island.exe`, then install the hooks as described below (the hooks need [Node.js](https://nodejs.org/)).
+
+
 ```bash
-git clone https://github.com/<your-account>/cc-island.git
+git clone https://github.com/momentxrdd/cc-island.git
 cd cc-island
 npm install
 npm run install-hooks

@@ -25,13 +25,24 @@ function post(urlPath, body, timeout, cb) {
   req.end(body);
 }
 
+// The running app writes its own executable path to launch.json (see main.js), so this works for both
+// `npm start` and the packaged build. Falls back to the local Electron binary for development.
+function launchTarget() {
+  try {
+    const f = path.join(process.env.APPDATA || '', 'cc-island', 'launch.json');
+    const t = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (t && t.exe) return { exe: t.exe, args: Array.isArray(t.args) ? t.args : [] };
+  } catch {}
+  return { exe: path.join(__dirname, 'node_modules', 'electron', 'dist', 'electron.exe'), args: [__dirname] };
+}
+
 function launchApp() {
-  const exe = path.join(__dirname, 'node_modules', 'electron', 'dist', 'electron.exe');
+  const { exe, args } = launchTarget();
   if (!fs.existsSync(exe)) return false;
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE; // bazı terminallerde set edilir ve Electron'u düz node gibi çalıştırır
   try {
-    spawn(exe, [__dirname, '--auto'], { detached: true, stdio: 'ignore', windowsHide: true, env }).unref();
+    spawn(exe, [...args, '--auto'], { detached: true, stdio: 'ignore', windowsHide: true, env }).unref();
     return true;
   } catch { return false; }
 }
