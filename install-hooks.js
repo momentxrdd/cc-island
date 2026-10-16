@@ -5,11 +5,24 @@ const { AGENTS } = require('./lib/agents');
 
 const home = os.homedir();
 const hookPath = path.join(__dirname, 'hook.js');
-const cmdFor = (agent) => `node "${hookPath}"` + (agent === 'claude' ? '' : ` --agent=${agent}`);
+const helperPath = path.join(__dirname, 'bin', 'cc-helper.exe');
+const { spawnSync } = require('child_process');
+const exePath = process.versions.electron ? process.execPath : '';
+let nodeOnPath = null;
+function hasNode() {
+  if (nodeOnPath == null) { try { nodeOnPath = spawnSync('where', ['node'], { windowsHide: true }).status === 0; } catch { nodeOnPath = false; } }
+  return nodeOnPath;
+}
+const packaged = () => !!exePath && !/[\\/]node_modules[\\/]electron[\\/]/i.test(exePath);
+const cmdFor = (agent) => {
+  const tail = agent === 'claude' ? '' : ` --agent=${agent}`;
+  if (packaged() && !hasNode() && fs.existsSync(helperPath)) return `"${helperPath}" hook --exe "${exePath}"${tail}`;
+  return `node "${hookPath}"${tail}`;
+};
 const norm = (s) => s.replace(/\\/g, '/').toLowerCase();
 const isOurs = (h) => !!h && typeof h.command === 'string' &&
-  (norm(h.command).includes(norm(hookPath)) || (h.command.includes('hook.js') && h.command.includes('cc-island')));
-const mine = (h) => !!h && typeof h.command === 'string' && norm(h.command).includes(norm(hookPath));
+  (norm(h.command).includes(norm(hookPath)) || /cc-helper\.exe"? hook --exe/i.test(h.command) || (h.command.includes('hook.js') && h.command.includes('cc-island')));
+const mine = (h) => !!h && typeof h.command === 'string' && (norm(h.command).includes(norm(hookPath)) || norm(h.command).includes(norm(helperPath) + '" hook'));
 
 const SPEC = {
   claude: { file: path.join(home, '.claude', 'settings.json'), dir: path.join(home, '.claude'), layout: 'nested',

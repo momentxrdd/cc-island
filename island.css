@@ -220,3 +220,25 @@ html:not([data-pet="off"]) .pk .row > .dot { display: none; }
 .ag-gemini { background: rgba(66,133,244,.2); color: #8ab4f8; }
 .ag-cursor { background: rgba(255,255,255,.14); color: #f0f0f0; }
 html:not([data-pet="off"]) .pet-fallback { display: none !important; }
+
+.cp { position: relative; }
+.ctxbar { position: absolute; left: 14px; right: 14px; bottom: 2px; height: 2px; border-radius: 1px; background: rgba(255,255,255,.08); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.ctxbar.on { opacity: 1; }
+.ctxbar i { display: block; height: 100%; width: 0; border-radius: inherit; background: #6ccb5f; transition: width .6s ease, background .3s; }
+.ctxbar[data-level="warn"] i { background: #ffd60a; }
+.ctxbar[data-level="crit"] i { background: #ff6b6b; }
+
+.ov-diff { margin: 10px 0 0 56px; border-radius: calc(10px * var(--rs, 1)); background: #0b0b0c; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); overflow: hidden; }
+.ov-diff .dh { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 11.5px; color: #c9c9ce; border-bottom: 1px solid rgba(255,255,255,.06); }
+.ov-diff .dh b { font-weight: 600; color: #eee; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-diff .dh .ad { color: #6ccb5f; margin-left: auto; font-variant-numeric: tabular-nums; }
+.ov-diff .dh .rm { color: #ff7b7b; font-variant-numeric: tabular-nums; }
+.ov-diff .dh .nw, .ov-diff .dh .mf { padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,.08); font-size: 10.5px; }
+.ov-diff .dl { max-height: 190px; overflow: auto; font: 11.5px/17px var(--mono, Consolas, monospace); }
+.ov-diff .ln { display: flex; white-space: pre; }
+.ov-diff .ln i { flex: none; width: 34px; padding-right: 6px; text-align: right; font-style: normal; color: #5c5c62; user-select: none; }
+.ov-diff .ln code { flex: 1; padding-right: 10px; color: #c4c4ca; font: inherit; }
+.ov-diff .ln.a { background: rgba(46,160,67,.16); } .ov-diff .ln.a code { color: #b6f0bf; }
+.ov-diff .ln.r { background: rgba(248,81,73,.15); } .ov-diff .ln.r code { color: #ffc1bd; }
+.ov-diff .more { padding: 4px 10px 6px; font-size: 11px; color: #8e8e93; }
+.ov-diff .dl::-webkit-scrollbar { width: 6px; height: 6px; } .ov-diff .dl::-webkit-scrollbar-thumb { background: #3a3a3f; border-radius: 3px; }

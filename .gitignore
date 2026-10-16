@@ -2,6 +2,7 @@
 dist/
 ui/
 bin/
+release/
 
 # dependencies
 node_modules/

@@ -103,6 +103,26 @@
   import i101 from '@fluentui/svg-icons/icons/color_20_filled.svg?raw';
   import i102 from '@fluentui/svg-icons/icons/resize_20_regular.svg?raw';
   import i103 from '@fluentui/svg-icons/icons/resize_20_filled.svg?raw';
+  import i104 from '@fluentui/svg-icons/icons/weather_sunny_20_regular.svg?raw';
+  import i105 from '@fluentui/svg-icons/icons/weather_sunny_20_filled.svg?raw';
+  import i106 from '@fluentui/svg-icons/icons/weather_moon_20_regular.svg?raw';
+  import i107 from '@fluentui/svg-icons/icons/weather_moon_20_filled.svg?raw';
+  import i108 from '@fluentui/svg-icons/icons/weather_partly_cloudy_day_20_regular.svg?raw';
+  import i109 from '@fluentui/svg-icons/icons/weather_partly_cloudy_day_20_filled.svg?raw';
+  import i110 from '@fluentui/svg-icons/icons/weather_cloudy_20_regular.svg?raw';
+  import i111 from '@fluentui/svg-icons/icons/weather_cloudy_20_filled.svg?raw';
+  import i112 from '@fluentui/svg-icons/icons/weather_fog_20_regular.svg?raw';
+  import i113 from '@fluentui/svg-icons/icons/weather_fog_20_filled.svg?raw';
+  import i114 from '@fluentui/svg-icons/icons/weather_rain_20_regular.svg?raw';
+  import i115 from '@fluentui/svg-icons/icons/weather_rain_20_filled.svg?raw';
+  import i116 from '@fluentui/svg-icons/icons/weather_snow_20_regular.svg?raw';
+  import i117 from '@fluentui/svg-icons/icons/weather_snow_20_filled.svg?raw';
+  import i118 from '@fluentui/svg-icons/icons/weather_thunderstorm_20_regular.svg?raw';
+  import i119 from '@fluentui/svg-icons/icons/weather_thunderstorm_20_filled.svg?raw';
+  import i120 from '@fluentui/svg-icons/icons/gauge_20_regular.svg?raw';
+  import i121 from '@fluentui/svg-icons/icons/gauge_20_filled.svg?raw';
+  import i122 from '@fluentui/svg-icons/icons/drop_20_regular.svg?raw';
+  import i123 from '@fluentui/svg-icons/icons/drop_20_filled.svg?raw';
 
   export let name = 'info';
   export let size = 16;
@@ -215,6 +235,26 @@
     'color:filled': i101,
     'resize:regular': i102,
     'resize:filled': i103,
+    'wxSun:regular': i104,
+    'wxSun:filled': i105,
+    'wxMoon:regular': i106,
+    'wxMoon:filled': i107,
+    'wxPartly:regular': i108,
+    'wxPartly:filled': i109,
+    'wxCloud:regular': i110,
+    'wxCloud:filled': i111,
+    'wxFog:regular': i112,
+    'wxFog:filled': i113,
+    'wxRain:regular': i114,
+    'wxRain:filled': i115,
+    'wxSnow:regular': i116,
+    'wxSnow:filled': i117,
+    'wxStorm:regular': i118,
+    'wxStorm:filled': i119,
+    'gauge:regular': i120,
+    'gauge:filled': i121,
+    'drop:regular': i122,
+    'drop:filled': i123,
   };
 
   $: raw = ICONS[`${name}:${filled ? 'filled' : 'regular'}`] || ICONS['info:regular'];

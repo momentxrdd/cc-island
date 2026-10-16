@@ -273,6 +273,27 @@ static int brightness() {
 
 struct Game { bool fs = false, d3d = false; RECT mon{}; bool operator!=(const Game& o) const {
   return fs != o.fs || d3d != o.d3d || memcmp(&mon, &o.mon, sizeof mon) != 0; } };
+static const wchar_t* SHELL_CLASSES[] = { L"Progman", L"WorkerW", L"Shell_TrayWnd", L"Shell_SecondaryTrayWnd", L"XamlExplorerHostIslandWindow",
+  L"MultitaskingViewFrame", L"ForegroundStaging", L"TaskSwitcherWnd", L"TaskListThumbnailWnd", L"Windows.UI.Core.CoreWindow",
+  L"Shell_InputSwitchTopLevelWindow", L"TopLevelWindowForOverflowXamlIsland", L"NotifyIconOverflowWindow", L"Xaml_WindowedPopupClass",
+  L"LockScreenControllerProxyWindow", L"#32768" };
+static const wchar_t* SHELL_PROCS[] = { L"explorer.exe", L"shellexperiencehost.exe", L"startmenuexperiencehost.exe", L"searchhost.exe",
+  L"searchapp.exe", L"lockapp.exe", L"textinputhost.exe", L"dwm.exe", L"csrss.exe", L"logonui.exe", L"shellhost.exe", L"widgets.exe" };
+static bool isShellWindow(HWND h, DWORD pid) {
+  wchar_t cls[96]{}; GetClassNameW(h, cls, 96);
+  for (auto c : SHELL_CLASSES) if (!wcscmp(cls, c)) return true;
+  HANDLE ph = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (!ph) return false;
+  wchar_t path[MAX_PATH]{}; DWORD n = MAX_PATH;
+  bool shell = false;
+  if (QueryFullProcessImageNameW(ph, 0, path, &n)) {
+    const wchar_t* name = wcsrchr(path, L'\\'); name = name ? name + 1 : path;
+    for (auto p : SHELL_PROCS) if (!_wcsicmp(name, p)) { shell = true; break; }
+  }
+  CloseHandle(ph);
+  return shell;
+}
+
 static Game gameState(DWORD selfPid) {
   Game g;
   QUERY_USER_NOTIFICATION_STATE q = QUNS_ACCEPTS_NOTIFICATIONS;
@@ -282,8 +303,7 @@ static Game gameState(DWORD selfPid) {
   if (!h || !IsWindowVisible(h)) { g.fs = d3d || pres; g.d3d = d3d; return g; }
   DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
   if (pid == selfPid) return g;
-  wchar_t cls[64]{}; GetClassNameW(h, cls, 64);
-  if (!wcscmp(cls, L"Progman") || !wcscmp(cls, L"WorkerW") || !wcscmp(cls, L"Shell_TrayWnd") || !wcscmp(cls, L"Shell_SecondaryTrayWnd")) return g;
+  if (isShellWindow(h, pid)) return g;
   RECT r; if (!GetWindowRect(h, &r)) return g;
   MONITORINFO mi{ sizeof mi };
   if (!GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mi)) return g;
@@ -410,7 +430,35 @@ static int runType(DWORD pid, const std::wstring& text) {
   return ok ? 0 : 1;
 }
 
+static int runHook(int argc, wchar_t** argv) {
+  wchar_t self[MAX_PATH]{}; GetModuleFileNameW(nullptr, self, MAX_PATH);
+  std::wstring dir(self); dir = dir.substr(0, dir.find_last_of(L"\\/"));
+  std::wstring appDir = dir.substr(0, dir.find_last_of(L"\\/"));
+  std::wstring exe, extra;
+  for (int i = 2; i < argc; i++) {
+    if (_wcsicmp(argv[i], L"--exe") == 0 && i + 1 < argc) { exe = argv[++i]; continue; }
+    extra += L" \""; extra += argv[i]; extra += L"\"";
+  }
+  if (exe.empty()) return 0;
+  std::wstring cmd = L"\"" + exe + L"\" \"" + appDir + L"\\hook.js\"" + extra;
+  SetEnvironmentVariableW(L"ELECTRON_RUN_AS_NODE", L"1");
+  STARTUPINFOW si{ sizeof si };
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+  si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+  si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+  for (HANDLE h : { si.hStdInput, si.hStdOutput, si.hStdError }) if (h && h != INVALID_HANDLE_VALUE) SetHandleInformation(h, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+  PROCESS_INFORMATION pi{};
+  std::vector<wchar_t> buf(cmd.begin(), cmd.end()); buf.push_back(0);
+  if (!CreateProcessW(exe.c_str(), buf.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, appDir.c_str(), &si, &pi)) return 0;
+  WaitForSingleObject(pi.hProcess, INFINITE);
+  DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
+  CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+  return (int)code;
+}
+
 int wmain(int argc, wchar_t** argv) {
+  if (argc > 1 && wcscmp(argv[1], L"hook") == 0) return runHook(argc, argv);
   SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
   SetConsoleOutputCP(CP_UTF8);
   winrt::init_apartment(winrt::apartment_type::multi_threaded);

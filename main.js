@@ -1,4 +1,13 @@
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, globalShortcut, clipboard, net, shell, nativeTheme, systemPreferences } = require('electron');
+try { app.setPath('userData', require('path').join(app.getPath('appData'), 'cc-island')); } catch {}
+const HOOK_CMD = ['--install-hooks', '--uninstall-hooks'].find((f) => process.argv.includes(f));
+if (HOOK_CMD) {
+  const H = require('./install-hooks');
+  const remove = HOOK_CMD === '--uninstall-hooks';
+  for (const a of H.agents()) { if (remove ? a.detected : a.detected && (a.id === 'claude' || a.installed)) { try { H.installAgent(a.id, remove); } catch {} } }
+  app.exit(0);
+  return;
+}
 const http = require('http');
 const { execFile, execSync } = require('child_process');
 const { MediaWatcher } = require('./media');
@@ -7,6 +16,7 @@ const WIN = require('./lib/wincal');
 const HELPER = require('./lib/helper');
 const { History } = require('./lib/history');
 const RULES = require('./lib/rules');
+const DIFF = require('./lib/diff');
 const { Usage } = require('./lib/usage');
 const CAL = require('./lib/calendar');
 const fs = require('fs');
@@ -51,7 +61,11 @@ let settings = { motion: 'on', lang: 'auto', sound: 'on', media: 'spotify', disp
   calSystem: 'on',
   focusSync: 'on',
   gameMode: 'hide',
-  rules: [] };
+  rules: [],
+  stuckMin: 5,
+  clock: 'on',
+  weatherCity: '',
+  weatherLoc: null };
 const SCHEMA = {
   lang: ['auto', 'en', 'tr'], motion: ['on', 'system', 'off'], sound: ['on', 'important', 'off'], media: ['spotify', 'all', 'off'],
   display: ['primary', 'cursor'], osd: ['on', 'off'], pet: ['on', 'off'], calSystem: ['on', 'off'], focusSync: ['on', 'off'], gameMode: ['hide', 'important', 'off'], autoBreak: [true, false], shape: ['notch', 'pill'],
@@ -59,11 +73,13 @@ const SCHEMA = {
   notchHeight: { min: 28, max: 44 }, notchWidth: { min: 80, max: 240 }, notchLabel: { min: 60, max: 280 },
   radiusCompact: { min: 0, max: 150 }, radiusOverlay: { min: 0, max: 150 }, radiusPeek: { min: 0, max: 150 }, radiusFull: { min: 0, max: 150 },
   accentColor: 'hex',
+  stuckMin: { min: 0, max: 60 }, clock: ['on', 'off'], weatherCity: 'text',
 };
 function validSetting(k, v) {
   const r = SCHEMA[k];
   if (!r) return undefined;
   if (r === 'hex') return (v === '' || /^#[0-9a-fA-F]{6}$/.test(String(v))) ? String(v) : undefined;
+  if (r === 'text') return typeof v === 'string' ? v.trim().slice(0, 80) : undefined;
   if (Array.isArray(r)) return r.includes(v) ? v : undefined;
   const n = Math.round(+v);
   return Number.isFinite(n) ? Math.min(r.max, Math.max(r.min, n)) : undefined;
@@ -105,6 +121,7 @@ function setSetting(k, v) {
   if (k === 'osd' || k === 'focusSync') system.setActive(v !== 'off' || settings.osd !== 'off' || settings.focusSync === 'on');
   if (k === 'calendarUrl' || k === 'calSystem') refreshCalendar();
   if (k === 'gameMode') syncVisibility();
+  if (k === 'weatherCity') { settings.weatherLoc = null; refreshWeather(true); }
   if (k === 'focusSync') { if (v === 'off' && winFocusOurs) WIN.focus(false); syncFocusWatch(); }
   if (k === 'accentColor') send('theme-changed', getThemeInfo());
   try { fs.mkdirSync(path.dirname(settingsFile()), { recursive: true }); fs.writeFileSync(settingsFile(), JSON.stringify(settings)); } catch {}
@@ -206,6 +223,17 @@ function publicSession(s) {
   };
 }
 
+const CTX_WARN = [0.8, 0.95];
+function updateContext(s, u, model) {
+  const used = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.output_tokens || 0);
+  const max = /\[1m\]|1m/i.test(model || '') || used > 200000 ? 1000000 : 200000;
+  const pct = Math.min(1, used / max);
+  s.ctx = { used, max, pct, model: model || '' };
+  const level = CTX_WARN.filter((x) => pct >= x).length;
+  if (level > (s.ctxWarned || 0)) { s.ctxWarned = level; send('ctx-warn', { id: s.id, name: s.name, pct }); }
+  else if (pct < CTX_WARN[0] - 0.2) s.ctxWarned = 0;
+}
+
 async function readLastText(s) {
   if (!s.transcript) return false;
   s.lastRead = Date.now();
@@ -217,16 +245,22 @@ async function readLastText(s) {
     await fh.read(buf, 0, len, size - len);
     await fh.close();
     const lines = buf.toString('utf8').split('\n');
-    for (let i = lines.length - 1; i >= 0; i--) {
+    let gotText = false, gotCtx = false;
+    for (let i = lines.length - 1; i >= 0 && !(gotText && gotCtx); i--) {
       const l = lines[i].trim();
       if (!l || l[0] !== '{') continue;
       let o; try { o = JSON.parse(l); } catch { continue; }
-      if (o.type !== 'assistant') continue;
-      const c = o.message && o.message.content;
-      if (!Array.isArray(c)) continue;
+      if (o.type !== 'assistant' || !o.message) continue;
+      if (!gotCtx && o.message.usage && o.message.model !== '<synthetic>' && !o.isSidechain) {
+        gotCtx = true;
+        updateContext(s, o.message.usage, o.message.model);
+      }
+      const c = o.message.content;
+      if (gotText || !Array.isArray(c)) continue;
       const t = c.filter((b) => b.type === 'text' && b.text).map((b) => b.text).join('\n').trim();
-      if (t) { s.lastText = t.slice(0, 3000); return true; }
+      if (t) { s.lastText = t.slice(0, 3000); gotText = true; }
     }
+    return gotText;
   } catch {}
   return false;
 }
@@ -331,6 +365,7 @@ function handle(e) {
       s.status = 'working'; s.since = e.ts; s.tools = 0; s.current = null; s.turns++;
       s.prompt = (e.prompt || '').replace(/\s+/g, ' ').slice(0, 300);
       s.turn = { start: e.ts, prompt: s.prompt, tools: 0, files: [], errors: 0 };
+      s.repeatKey = ''; s.repeatN = 0; s.stuckFor = 0;
       addActivity(s, { tool: 'Prompt', summary: s.prompt, ts: e.ts, done: true, input: { prompt: e.prompt || '' } });
       return null;
     case 'PreToolUse': {
@@ -340,6 +375,9 @@ function handle(e) {
       const a = addActivity(s, { id: e.tool_use_id, tool: e.tool_name, summary: summarize(e.tool_name, inp).slice(0, 240), ts: e.ts, done: false, input: inp });
       s.current = a;
       if (Date.now() - s.lastRead > 2000) readLastText(s).then(() => push(null));
+      const key = e.tool_name + '|' + JSON.stringify(inp).slice(0, 2000);
+      if (key === s.repeatKey) s.repeatN++; else { s.repeatKey = key; s.repeatN = 1; }
+      if (s.repeatN === 3 && settings.stuckMin > 0) { s.alert = { kind: 'loop', tool: e.tool_name, summary: a.summary, n: 3 }; return 'stuck'; }
       return null;
     }
     case 'PostToolUse': {
@@ -576,9 +614,13 @@ function held() {
 const busyVisible = () => sessions.size > 0 || pending.size > 0 || !!timer || calSoon();
 const wantVisible = () => busyVisible() || held();
 let game = { active: false, d3d: false, mon: null }, gameSent = null;
+let gameRaw = null, gameT = null;
 function onGame(g) {
-  game = g;
-  syncVisibility();
+  gameRaw = g;
+  clearTimeout(gameT);
+  const same = g.active === game.active && g.d3d === game.d3d && JSON.stringify(g.mon) === JSON.stringify(game.mon);
+  if (same) return;
+  gameT = setTimeout(() => { game = gameRaw; syncVisibility(); }, g.active ? 2000 : 1000);
 }
 function gameOnOurDisplay() {
   if (!game.mon || !win || win.isDestroyed()) return true;
@@ -663,6 +705,63 @@ function decide(id, behavior, answers, denyMessage) {
   push(null);
 }
 
+function checkStuck() {
+  const lim = (settings.stuckMin || 0) * 60000;
+  if (!lim) return;
+  const now = Date.now();
+  for (const s of sessions.values()) {
+    if (s.status !== 'working' || [...pending.values()].some((p) => p.session_id === s.id)) continue;
+    const a = s.current && !s.current.done ? s.current : null;
+    const since = a ? a.ts : s.updated;
+    const limit = a ? lim : lim * 2;
+    if (now - since < limit) continue;
+    const mark = (a ? 'tool:' + a.n : 'idle:') + Math.floor((now - since) / limit);
+    if (s.stuckFor === mark) continue;
+    s.stuckFor = mark;
+    s.alert = a ? { kind: 'tool', tool: a.tool, summary: a.summary, ms: now - since } : { kind: 'quiet', ms: now - since };
+    push({ type: 'stuck', id: s.id });
+  }
+}
+
+function openPalette() {
+  if (!win || win.isDestroyed()) return;
+  hold('palette', 30000);
+  setFocusMode(true);
+  if (!win.isVisible()) { place(); win.showInactive(); }
+  win.focus();
+  send('palette');
+}
+
+let weather = null;
+async function refreshWeather(force) {
+  const city = settings.weatherCity;
+  if (!city) { weather = null; send('weather', null); return; }
+  try {
+    if (!settings.weatherLoc || force) {
+      const g = await (await net.fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=' + (I18N.lang || 'en') + '&name=' + encodeURIComponent(city))).json();
+      const r = g && g.results && g.results[0];
+      if (!r) { weather = { error: 'notfound', city }; send('weather', weather); return; }
+      settings.weatherLoc = { name: r.name, country: r.country_code || '', lat: r.latitude, lon: r.longitude };
+      try { fs.writeFileSync(settingsFile(), JSON.stringify(settings)); } catch {}
+    }
+    const L = settings.weatherLoc;
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + L.lat + '&longitude=' + L.lon +
+      '&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m' +
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=4';
+    const f = await (await net.fetch(url)).json();
+    if (!f || !f.current) throw new Error('weather');
+    weather = {
+      place: L.name, at: Date.now(),
+      now: { temp: f.current.temperature_2m, feels: f.current.apparent_temperature, code: f.current.weather_code, day: !!f.current.is_day, wind: f.current.wind_speed_10m, humidity: f.current.relative_humidity_2m },
+      days: (f.daily.time || []).map((d, k) => ({ date: d, code: f.daily.weather_code[k], max: f.daily.temperature_2m_max[k], min: f.daily.temperature_2m_min[k], rain: f.daily.precipitation_probability_max[k] })),
+    };
+  } catch (e) {
+    weather = { ...(weather || {}), error: 'fetch' };
+  }
+  send('weather', weather);
+  send('settings', settingsPayload());
+}
+
 const SHELLS = /^(cmd|bash|sh|dash|zsh|fish|pwsh|powershell|conhost|openconsole|wsl|wslhost|mintty|git-bash)\.exe$/i;
 async function agentPid(s) {
   if (s.agentPid) return s.agentPid;
@@ -711,7 +810,8 @@ function startServer() {
       const s = getSession(e);
       const p = { id: nextId++, session_id: s.id, tool: e.tool_name || '?', summary: summarize(e.tool_name, e.tool_input).slice(0, 240),
         detail: detailOf(e.tool_name, e.tool_input), ts: e.ts || Date.now(), suggestions: e.permission_suggestions || null, res,
-        input: e.tool_input || {}, questions: e.tool_name === 'AskUserQuestion' ? questionsOf(e.tool_input) : null };
+        input: e.tool_input || {}, questions: e.tool_name === 'AskUserQuestion' ? questionsOf(e.tool_input) : null,
+        diff: DIFF.diffOf(e.tool_name, e.tool_input) };
       if (p.questions && !p.questions.length) p.questions = null;
       pending.set(p.id, p);
       if (applyRule(p)) return;
@@ -726,7 +826,13 @@ const W0 = 940, H0 = 800;
 const SMALL = [520, 780];
 const SURFACE = { compact: SMALL, peek: SMALL, overlay: SMALL, expanding: [W0, H0], full: [W0, H0] };
 let surfaceSize = SURFACE.compact;
+function setFocusMode(big) {
+  if (!win || win.isDestroyed() || win.isFocusable() === big) return;
+  win.setFocusable(big);
+  if (!big && win.isFocused()) win.blur();
+}
 function setSurface(v) {
+  setFocusMode(v === 'expanding' || v === 'full');
   const s = SURFACE[v];
   if (!s || win && win.isDestroyed() || s === surfaceSize) return;
   surfaceSize = s;
@@ -951,6 +1057,11 @@ app.whenReady().then(() => {
     const now = Date.now();
     for (const [id, s] of sessions) if (now - s.updated > STALE_MS) sessions.delete(id);
   }, 60000);
+  setInterval(checkStuck, 15000);
+  setInterval(() => { if (sessions.size) usage.get(60000).then((r) => r && send('usage', r)); }, 120000);
+  refreshWeather();
+  setInterval(() => refreshWeather(), 30 * 60000);
+  globalShortcut.register('Control+Alt+Space', openPalette);
   setInterval(async () => {
     if (sessions.size) {
       const alive = await agentsAlive();
@@ -983,6 +1094,8 @@ ipcMain.handle('get-detail', (_e, sid, n) => {
 });
 ipcMain.handle('get-transcript', (_e, sid) => getTranscript(sid));
 ipcMain.handle('get-usage', () => usage.get());
+ipcMain.handle('get-weather', () => weather);
+ipcMain.on('palette-open', () => openPalette());
 ipcMain.on('set-setting', (_e, k, v) => { const ok = validSetting(String(k), v); if (ok !== undefined) setSetting(k, ok); });
 ipcMain.on('set-login', (_e, on) => setStartAtLogin(!!on));
 ipcMain.on('hooks-cmd', (_e, cmd, agent) => {
