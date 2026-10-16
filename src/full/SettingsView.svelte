@@ -39,6 +39,7 @@
     focusMin: settings.focusMin || 25,
     breakMin: settings.breakMin || 5,
     longBreakMin: settings.longBreakMin || 15,
+    stuckMin: settings.stuckMin ?? 5,
     lang: settings.langPref || settings.lang || 'auto',
     motion: settings.motion || 'on',
     sound: settings.sound || 'on',
@@ -64,12 +65,14 @@
   $: pull('focusMin', settings.focusMin);
   $: pull('breakMin', settings.breakMin);
   $: pull('longBreakMin', settings.longBreakMin);
+  $: pull('stuckMin', settings.stuckMin ?? 5);
   $: pull('lang', settings.langPref || settings.lang);
   $: pull('motion', settings.motion);
   $: pull('sound', settings.sound);
   $: pull('media', settings.media);
   $: pull('display', settings.display);
   $: pull('gameMode', settings.gameMode || 'hide');
+  $: pull('idle', settings.idle || 'show');
   $: pull('accentMode', settings.accentColor ? 'manual' : 'auto');
 
   function push(key, value, settingKey = key) {
@@ -83,6 +86,7 @@
   $: push('media', d.media);
   $: push('display', d.display);
   $: push('gameMode', d.gameMode);
+  $: push('idle', d.idle);
   $: if (d.accentMode !== synced.accentMode) {
     synced.accentMode = d.accentMode;
     setSetting('accentColor', d.accentMode === 'auto' ? '' : (settings.accentColor || '#0078D7'));
@@ -105,6 +109,9 @@
   }
 
   let confirmClear = false, confirmQuit = false;
+  let cityDraft = settings.weatherCity || '', citySeen = settings.weatherCity || '';
+  $: if ((settings.weatherCity || '') !== citySeen) { citySeen = settings.weatherCity || ''; cityDraft = citySeen; }
+  const saveCity = () => setSetting('weatherCity', cityDraft.trim());
 
   $: petOn = settings.pet !== 'off';
   const PET_DEMO = [['working-thinking', 'Düşünüyor'], ['working-typing', 'Kod yazıyor'], ['reading', 'Dosya okuyor'], ['working-building', 'Komut çalıştırıyor'],
@@ -285,8 +292,30 @@
   </section>
 
   <section>
+    <h2>Saat ve hava durumu</h2>
+    <div class="cards">
+      <SettingsCard icon="clock" title="Kapsülde saat" desc="Ajan boştayken kapsülde saat ve hava durumu görünür">
+        <span class="state">{settings.clock !== 'off' ? 'Açık' : 'Kapalı'}</span>
+        <ToggleSwitch checked={settings.clock !== 'off'} on:change={(e) => setSetting('clock', e.target.checked ? 'on' : 'off')} />
+      </SettingsCard>
+      <SettingsCard icon="wxPartly" title="Hava durumu şehri"
+        desc={settings.weatherLoc ? settings.weatherLoc.name + (settings.weatherLoc.country ? ', ' + settings.weatherLoc.country : '') + ' · Open-Meteo, 30 dakikada bir' : 'Boş bırakılırsa hava durumu kapalı kalır ve hiçbir istek yapılmaz.'}>
+        <input class="city" bind:value={cityDraft} placeholder="ör. İstanbul" aria-label="Şehir" on:keydown={(e) => e.key === 'Enter' && saveCity()} />
+        <Button on:click={saveCity}>{cityDraft.trim() ? 'Kaydet' : 'Kapat'}</Button>
+      </SettingsCard>
+    </div>
+  </section>
+
+  <section>
     <h2>Oyun ve tam ekran</h2>
     <div class="cards">
+      <SettingsCard icon="eye" title="Ajan çalışmıyorken"
+        desc="Göster: ada boştayken de ekranda kalır (uyuyan maskot, saat, hava durumu) ve kendini kapatmaz. Gizle: oturum yokken çekilir, otomatik başlatıldıysa bir süre sonra kapanır.">
+        <SegmentedControl bind:value={d.idle}>
+          <SegmentedControlButton value="show">Göster</SegmentedControlButton>
+          <SegmentedControlButton value="hide">Gizle</SegmentedControlButton>
+        </SegmentedControl>
+      </SettingsCard>
       <SettingsCard icon="monitor" title="Tam ekran uygulamalarda"
         desc="Adanın ekranında oyun, tam ekran video ya da sunum açıkken. Özel tam ekran oyunlarda ada her zaman çekilir, oyun simge durumuna küçülmesin diye.">
         <SegmentedControl bind:value={d.gameMode}>
@@ -363,6 +392,17 @@
         </SettingsCard>
       {/each}
       <div class="note">Bağlamak, aracın kendi ayar dosyasına CC Island kancasını ekler (önce yedek alınır: <code>.ccisland.bak</code>). Değişiklik yeni açılan oturumlarda geçerli olur.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Takılma uyarısı</h2>
+    <div class="cards">
+      <SettingsCard icon="alert" title="Takılmış görünen oturumlar"
+        desc={d.stuckMin ? 'Bir araç ' + d.stuckMin + ' dakikadan uzun sürerse ya da aynı adım üst üste 3 kez tekrarlanırsa bildirir' : 'Kapalı'}>
+        <span class="value">{d.stuckMin ? d.stuckMin + ' dk' : 'Kapalı'}</span>
+        <div class="slider"><Slider min={0} max={30} step={1} value={d.stuckMin} on:change={commit('stuckMin')} /></div>
+      </SettingsCard>
     </div>
   </section>
 
@@ -510,6 +550,9 @@
   .pet-stage { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 4px; background: #0e1116; overflow: hidden; }
   .pet-label { font-size: 12px; line-height: 16px; color: var(--fds-text-secondary); text-align: center; }
 
+  .city { height: 32px; width: 180px; box-sizing: border-box; padding: 0 10px; border: 0; border-radius: 4px; font: inherit; font-size: 13px; color: var(--fds-text-primary);
+    background: var(--fds-control-fill-default, rgba(255,255,255,.06)); box-shadow: inset 0 0 0 1px var(--fds-control-stroke-default, rgba(255,255,255,.07)), inset 0 -1px 0 var(--fds-control-strong-stroke-default, rgba(255,255,255,.4)); outline: none; }
+  .city:focus { box-shadow: inset 0 0 0 1px var(--fds-control-stroke-default, rgba(255,255,255,.07)), inset 0 -2px 0 var(--fds-accent-default, #60cdff); }
   .cal-body { display: flex; align-items: center; gap: 16px; justify-content: space-between; font-size: 13px; line-height: 18px; color: var(--fds-text-secondary); }
   .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--fds-system-success, #6ccb5f); }
   .note { padding: 8px 4px 0; font-size: 12px; line-height: 16px; color: var(--fds-text-secondary); }

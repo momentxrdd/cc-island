@@ -385,12 +385,39 @@ function syncPet(el) {
   if (ms) petT = setTimeout(schedule, ms);
 }
 
+function focusSession() {
+  const list = sorted();
+  return list.find((s) => s.status === 'working' && s.ctx) || list.find((s) => s.ctx) || null;
+}
+function syncCtxBar(bar) {
+  if (!bar) return;
+  const s = focusSession();
+  const pct = s && s.ctx ? s.ctx.pct : null;
+  bar.classList.toggle('on', pct != null);
+  if (pct == null) return;
+  bar.firstElementChild.style.width = Math.max(2, Math.round(pct * 100)) + '%';
+  bar.dataset.level = pct >= 0.9 ? 'crit' : pct >= 0.7 ? 'warn' : 'ok';
+  bar.title = L('ctx.title', { pct: Math.round(pct * 100), used: fmtN(s.ctx.used), max: fmtN(s.ctx.max) });
+}
+
+function diffPreview(diff, max = 14) {
+  if (!diff || !diff.length) return '';
+  const d = diff[0];
+  const lines = [];
+  for (const h of d.hunks) { for (const l of h.lines) { if (lines.length >= max) break; lines.push(l); } if (lines.length >= max) break; }
+  const total = diff.reduce((a, f) => a + f.hunks.reduce((b, h) => b + h.lines.length, 0), 0);
+  const name = String(d.file || '').split(/[\\/]/).pop();
+  return `<div class="ov-diff"><div class="dh"><b>${esc(name)}</b>${d.isNew ? `<span class="nw">${esc(L('diff.new'))}</span>` : ''}<span class="ad">+${d.added || 0}</span><span class="rm">−${d.removed || 0}</span>${diff.length > 1 ? `<span class="mf">+${diff.length - 1}</span>` : ''}</div>
+    <div class="dl">${lines.map((l) => `<div class="ln ${l.t === '+' ? 'a' : l.t === '-' ? 'r' : ''}"><i>${l.t === '+' ? l.n : l.t === '-' ? l.o : l.n || ''}</i><code>${esc(l.s) || ' '}</code></div>`).join('')}
+    ${total > lines.length ? `<div class="more">${esc(L('diff.more', { n: total - lines.length }))}</div>` : ''}</div></div>`;
+}
+
 function renderCompact(el) {
   if (!el.__r) {
     el.innerHTML = `<div class="cp" role="button" tabindex="0" aria-label="${esc(L('ui.aria.status'))}" data-m="idle">
       <span class="cl"><svg class="ring" viewBox="0 0 28 28"><circle class="rt" cx="14" cy="14" r="12"/><circle class="rp" cx="14" cy="14" r="12"/></svg>${claudeIcon(21)}${CCPet.html('idle-living', 30, 'cp-pet')}</span>
-      <span class="lb"></span><span class="tr"></span><span class="xw"></span><span class="mu"><span class="mu-art" data-art></span><span class="wv"><i></i><i></i><i></i></span></span></div>`;
-    el.__r = { cp: el.firstElementChild, pet: el.querySelector('.pet'), ring: el.querySelector('.ring'), lb: el.querySelector('.lb'), tr: el.querySelector('.tr'), xw: el.querySelector('.xw'), mu: el.querySelector('.mu'), tk: '', lt: '' };
+      <span class="lb"></span><span class="tr"></span><span class="xw"></span><span class="ctxbar" aria-hidden="true"><i></i></span><span class="mu"><span class="mu-art" data-art></span><span class="wv"><i></i><i></i><i></i></span></span></div>`;
+    el.__r = { cp: el.firstElementChild, ctx: el.querySelector('.ctxbar'), pet: el.querySelector('.pet'), ring: el.querySelector('.ring'), lb: el.querySelector('.lb'), tr: el.querySelector('.tr'), xw: el.querySelector('.xw'), mu: el.querySelector('.mu'), tk: '', lt: '' };
   }
   const { cp, ring, lb, tr, mu } = el.__r;
   const b = computeBase();
@@ -411,7 +438,8 @@ function renderCompact(el) {
   cp.setAttribute('aria-label', L('ui.aria.compact', { text: text || L('ui.idle') }));
   syncPet(el.__r.pet);
   mu.classList.toggle('on', !!(S.media && S.media.status === 'Playing'));
-  compactExtras(el.__r.xw);
+  compactExtras(el.__r.xw, m);
+  syncCtxBar(el.__r.ctx);
   syncMedia();
 }
 
@@ -437,6 +465,7 @@ function renderOverlay(el, item) {
         ${nav ? `<span class="ov-nav"><button class="pn" data-permnav="prev" aria-label="${esc(L('ui.prevReq'))}">${ic('chevron', 14)}</button><b class="pn-c"></b><button class="pn pn-r" data-permnav="next" aria-label="${esc(L('ui.nextReq'))}">${ic('chevron', 14)}</button></span>` : `<span class="ov-tr">${item.kind === 'music' ? WAVE : ''}</span>`}
       </div>
       ${item.buttons ? `<div class="ov-ac custom">${item.buttons.map((b) => `<button class="${b.cls}" ${b.attrs}>${b.icon ? ic(b.icon, 14) : ''}${esc(b.label)}</button>`).join('')}</div>` : ''}
+      ${!isQ && item.actions && item.diff ? diffPreview(item.diff) : ''}
       ${isQ ? '<div class="ov-q"></div>' : item.actions ? `<div class="ov-ac">
         <button class="b-allow" data-act="allow">${ic('check', 14)}${L('ui.allow')}</button>
         <button class="b-deny" data-act="deny">${ic('x', 14)}${L('ui.deny')}</button>
@@ -503,6 +532,8 @@ function renderFullView() {
       settings: S.settings,
       themeInfo: S.themeInfo || { isDark: true, accent: null },
       focusReply: S.focusReply || 0,
+      paletteToken: S.palette || 0,
+      weather: W.weather,
     };
     const instance = window.CCFullView.mount($('full'), props);
     if (instance && !instance.__listenerAttached) {
@@ -648,7 +679,7 @@ function onState({ sessions, pending, notify }) {
       ? { id: 'perm', kind: 'notification', persistent: true, priority: 10, title: L('notif.question', { name }), text: '',
         badge: 'help', actions: true, pid: p.id, hasSug: false, questions: p.questions, count: pending.length, pi: idx, bulkN, sid: p.session_id }
       : { id: 'perm', kind: 'notification', persistent: true, priority: 10, title: L('notif.permission', { name }),
-        text: `${p.tool}  ${p.summary}`, badge: 'lock', actions: true, pid: p.id, hasSug: p.hasSug, ruleHint: p.ruleHint, questions: null, count: pending.length, pi: idx, bulkN, sid: p.session_id });
+        text: `${p.tool}  ${p.summary}`, badge: 'lock', actions: true, pid: p.id, hasSug: p.hasSug, ruleHint: p.ruleHint, diff: p.diff, questions: null, count: pending.length, pi: idx, bulkN, sid: p.session_id });
   } else { island.dismiss('perm'); S.permIdx = 0; }
   for (const pid of Object.keys(S.ans)) if (!pending.some((p) => p.id === +pid)) delete S.ans[pid];
 
@@ -674,6 +705,14 @@ function onState({ sessions, pending, notify }) {
     } else if (notify.type === 'waiting') {
       island.push({ id: `wait:${notify.id}:${Date.now()}`, kind: 'notification', badge: 'alert', title: L('notif.waiting', { name }), text: trClean(s && s.message, 120), duration: 7000 });
       beep([880, 660, 880], true);
+    } else if (notify.type === 'stuck' && s && s.alert) {
+      const a = s.alert;
+      const text = a.kind === 'loop' ? L('stuck.loop', { tool: a.tool, summary: trClean(a.summary, 70) })
+        : a.kind === 'tool' ? L('stuck.tool', { tool: a.tool, t: fmt(a.ms), summary: trClean(a.summary, 60) })
+        : L('stuck.quiet', { t: fmt(a.ms) });
+      island.push({ id: `stuck:${notify.id}:${Date.now()}`, kind: 'notification', badge: 'alert', title: L('stuck.title', { name }), text, duration: 10000,
+        buttons: s.agent !== 'cursor' ? [{ cls: 'b-allow', icon: 'message', label: L('ui.reply'), attrs: `data-reply="${esc(s.id)}"` }] : null });
+      beep([520, 440], true);
     } else if (notify.type === 'permission' || notify.type === 'question') { S.sel = notify.id; beep([880, 660, 880], true); }
   }
   for (const s of sessions) { const id = S.doneId[s.id]; if (id && island.has(id)) island.update(id, { title: doneTitle(s, s.name), text: doneText(s) }); }
@@ -796,6 +835,15 @@ window.ccApi.onSettings((s) => {
 });
 if (window.ccApi.onPermNav) window.ccApi.onPermNav((d) => navPerm(d === 'prev' ? -1 : 1));
 window.ccApi.onState(onState);
+if (window.ccApi.onCtxWarn) window.ccApi.onCtxWarn((d) => {
+  island.push({ id: 'ctx:' + d.id + ':' + Math.round(d.pct * 100), kind: 'notification', badge: 'alert', title: L('ctx.warnTitle', { name: d.name, pct: Math.round(d.pct * 100) }),
+    text: L(d.pct >= 0.95 ? 'ctx.warnCrit' : 'ctx.warn'), duration: 9000 });
+  beep([660, 520], true);
+});
+if (window.ccApi.onUsage) window.ccApi.onUsage((u) => { W.usage = u; W.usageAt = Date.now(); schedule(); });
+if (window.ccApi.onWeather) window.ccApi.onWeather((w) => { W.weather = w; schedule(); });
+if (window.ccApi.getWeather) window.ccApi.getWeather().then((w) => { W.weather = w; schedule(); });
+if (window.ccApi.onPalette) window.ccApi.onPalette(() => { S.palette = Date.now(); if (!island.expanded) window.expandSoon(); else schedule(); });
 if (window.ccApi.onGame) window.ccApi.onGame((v) => { S.game = !!v; });
 window.ccApi.onMedia(onMedia);
 window.ccApi.onDemo(runDemo);

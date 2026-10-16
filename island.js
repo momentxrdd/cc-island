@@ -201,11 +201,13 @@ class DynamicIsland {
     }, sig);
     this.root.addEventListener('pointerleave', () => {
       this._clearT('enter');
-      this._t('leave', () => {
+      const leave = () => {
+        if (this.state.expanded && this._editing()) { this._t('leave', leave, 1400); return; }
         this.state.hover = false;
         if (this.state.expanded && !this._persistent()) this.state.expanded = false;
         this.commit();
-      }, this.state.expanded ? 1400 : 220);
+      };
+      this._t('leave', leave, this.state.expanded ? 1400 : 220);
       if (this.opts.onHover) this.opts.onHover(false);
     }, sig);
     this.root.addEventListener('pointerdown', (e) => {
@@ -214,8 +216,18 @@ class DynamicIsland {
       else if (e.target.closest('[data-toggle]')) this.collapse();
     }, sig);
     this.root.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.state.expanded ? this.collapse() : this.expand(); }
+      if (e.defaultPrevented || DynamicIsland.isTyping(e.target)) return;
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === this.root) { e.preventDefault(); this.state.expanded ? this.collapse() : this.expand(); }
       if (e.key === 'Escape') this.collapse();
     }, sig);
+  }
+
+  static isTyping(el) {
+    return !!(el && el.closest && el.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'));
+  }
+  _editing() {
+    const a = this.root.ownerDocument.activeElement;
+    if (!a || !this.root.contains(a) || !DynamicIsland.isTyping(a)) return false;
+    return a.ownerDocument.hasFocus() || !!(a.value && a.value.trim());
   }
 }

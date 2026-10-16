@@ -1,4 +1,4 @@
-const W = { timer: null, cal: { events: [], error: '', at: 0 }, calOn: false, osdOn: true, usage: null, usageAt: 0, usageBusy: false };
+const W = { weather: null, timer: null, cal: { events: [], error: '', at: 0 }, calOn: false, osdOn: true, usage: null, usageAt: 0, usageBusy: false };
 const MIN = 60000;
 
 const hm = (ts) => new Date(ts).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
@@ -23,15 +23,32 @@ const untilLong = (start) => {
 };
 const untilText = (e) => { const d = e.start - Date.now(); return d <= 0 ? L('cal.now') : L('cal.chipMin', { m: Math.max(1, Math.ceil(d / MIN)) }); };
 
-function compactExtras(el) {
+function wxIcon(code, day) {
+  if (code == null) return 'cloud';
+  if (code === 0 || code === 1) return day === false ? 'moon' : 'sun';
+  if (code === 2) return day === false ? 'moon' : 'cloudSun';
+  if (code === 3) return 'cloud';
+  if (code === 45 || code === 48) return 'cloudFog';
+  if (code >= 71 && code <= 77 || code === 85 || code === 86) return 'cloudSnow';
+  if (code >= 95) return 'cloudBolt';
+  return 'cloudRain';
+}
+const nowHM = () => new Date().toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
+
+function compactExtras(el, mode) {
   const t = W.timer, e = soonEvent();
-  const key = (t ? t.phase + (t.paused ? 'p' : '') : '') + '|' + (e ? e.id : '');
+  const idle = mode === 'ready' || mode === 'idle';
+  const clock = idle && !t && !e && W.set && W.set.clock !== 'off';
+  const wx = clock && W.weather && W.weather.now ? W.weather.now : null;
+  const key = (t ? t.phase + (t.paused ? 'p' : '') : '') + '|' + (e ? e.id : '') + '|' + (clock ? 'c' : '') + (wx ? wxIcon(wx.code, wx.day) + Math.round(wx.temp) : '');
   if (el.__xk !== key) {
     el.__xk = key;
-    el.innerHTML = (e ? `<span class="xc cal" title="${esc(title(e))}">${ic('calendar', 12)}<b data-until="${e.start}">${untilText(e)}</b></span>` : '') +
+    el.innerHTML = (clock ? `<span class="xc clk"><b data-clock>${nowHM()}</b></span>` : '') +
+      (wx ? `<span class="xc wx" title="${esc(W.weather.place || '')}">${ic(wxIcon(wx.code, wx.day), 12)}<b>${Math.round(wx.temp)}°</b></span>` : '') +
+      (e ? `<span class="xc cal" title="${esc(title(e))}">${ic('calendar', 12)}<b data-until="${e.start}">${untilText(e)}</b></span>` : '') +
       (t ? `<span class="xc tmr ${t.phase}${t.paused ? ' paused' : ''}"><svg class="mini" viewBox="0 0 16 16"><circle class="rt" cx="8" cy="8" r="6.5"/><circle class="rp" cx="8" cy="8" r="6.5" data-tring/></svg><b data-timer>${clockText(timerLeft())}</b></span>` : '');
   }
-  el.classList.toggle('on', !!(t || e));
+  el.classList.toggle('on', !!(t || e || clock));
 }
 
 function todayItem(selected) {
@@ -147,6 +164,8 @@ function tickWidgets() {
   document.querySelectorAll('[data-timer]').forEach((e) => { if (W.timer && e.textContent !== left) e.textContent = left; });
   document.querySelectorAll('[data-tring]').forEach((e) => e.style.strokeDashoffset = String(40.84 * (1 - frac)));
   document.querySelectorAll('[data-tring-big]').forEach((e) => e.style.strokeDashoffset = String(RING_T * (1 - frac)));
+  const hmNow = nowHM();
+  document.querySelectorAll('[data-clock]').forEach((e) => { if (e.textContent !== hmNow) e.textContent = hmNow; });
   document.querySelectorAll('[data-until]').forEach((e) => { const t = untilText({ start: +e.dataset.until }); if (e.textContent !== t) e.textContent = t; });
   document.querySelectorAll('[data-until-long]').forEach((e) => { const t = untilLong(+e.dataset.untilLong); if (e.textContent !== t) e.textContent = t; });
   const k = (soonEvent() || {}).id || '';

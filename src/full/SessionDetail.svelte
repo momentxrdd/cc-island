@@ -14,6 +14,7 @@
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
   import Composer from './Composer.svelte';
+  import DiffView from './DiffView.svelte';
 
   import { createEventDispatcher } from 'svelte';
 
@@ -127,6 +128,7 @@
 </script>
 
 <div class="session-detail-root">
+<div class="sd-scroll">
   <header class="detail-header">
     <div class="header-main">
       <div class="title-row">
@@ -141,6 +143,16 @@
           <InfoBadge severity="neutral">Boşta</InfoBadge>
         {/if}
       </div>
+
+      {#if session.ctx}
+        {@const pct = Math.round(session.ctx.pct * 100)}
+        <div class="ctx-row" title="{session.ctx.used.toLocaleString('tr-TR')} / {session.ctx.max.toLocaleString('tr-TR')} token">
+          <span class="ctx-l">Bağlam</span>
+          <span class="ctx-bar" class:warn={pct >= 70} class:crit={pct >= 90}><i style="width:{Math.max(2, pct)}%"></i></span>
+          <span class="ctx-p">%{pct}</span>
+          <span class="ctx-m">{session.ctx.max >= 1000000 ? '1M' : Math.round(session.ctx.max / 1000) + 'k'}</span>
+        </div>
+      {/if}
 
       <div class="path-row" title={session.cwd}>
         <Icon name="folder" size={13} />
@@ -190,7 +202,9 @@
             </div>
           {/if}
 
-          {#if !p.questions && p.detail}
+          {#if !p.questions && p.diff && p.diff.length}
+            <DiffView diff={p.diff} />
+          {:else if !p.questions && p.detail}
             <pre class="pending-detail">{p.detail}</pre>
           {/if}
 
@@ -572,21 +586,31 @@
     {/if}
   </div>
 
+</div>
   {#if session.agent !== 'cursor'}<Composer {session} {pending} focusToken={focusReply} />{/if}
 </div>
 
 <style>
   .session-detail-root {
     flex: 1;
+    min-height: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+    background: var(--fds-solid-background-base, transparent);
+  }
+  .sd-scroll {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 16px 20px;
     box-sizing: border-box;
-    gap: 14px;
-    background: var(--fds-solid-background-base, transparent);
   }
 
   .detail-header {
@@ -957,6 +981,13 @@
   :global(.sparkle-icon) {
     color: var(--fds-accent-default, #f59e0b);
   }
+  .ctx-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; font-size: 12px; color: var(--fds-text-secondary); max-width: 360px; }
+  .ctx-bar { flex: 1; height: 4px; border-radius: 2px; overflow: hidden; background: var(--fds-control-strong-stroke-disabled, rgba(255,255,255,.12)); }
+  .ctx-bar i { display: block; height: 100%; border-radius: inherit; background: #6ccb5f; transition: width .6s ease; }
+  .ctx-bar.warn i { background: #fce100; }
+  .ctx-bar.crit i { background: #ff99a4; }
+  .ctx-p { color: var(--fds-text-primary); font-variant-numeric: tabular-nums; min-width: 34px; }
+  .ctx-m { opacity: .7; }
   .sum-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
   .sum-row span { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px;
     color: var(--fds-text-secondary); background: var(--fds-subtle-fill-secondary, rgba(255,255,255,.06)); }

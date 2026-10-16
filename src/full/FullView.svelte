@@ -5,6 +5,7 @@
   import TodayView from './TodayView.svelte';
   import SettingsView from './SettingsView.svelte';
   import HistoryView from './HistoryView.svelte';
+  import Palette from './Palette.svelte';
 
   export let sessions = [];
   export let pending = [];
@@ -18,6 +19,43 @@
   export let settings = {};
   export let themeInfo = { isDark: true, accent: null };
   export let focusReply = 0;
+  export let paletteToken = 0;
+  export let weather = null;
+
+  let paletteOpen = false, seenPalette = 0, localFocus = 0;
+  $: if (paletteToken && paletteToken !== seenPalette) { seenPalette = paletteToken; paletteOpen = true; }
+  $: replyToken = Math.max(focusReply || 0, localFocus);
+  const api = (fn, ...a) => window.ccApi && window.ccApi[fn] && window.ccApi[fn](...a);
+  function onWindowKey(e) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); paletteOpen = !paletteOpen; }
+  }
+  const go = (id) => handleSelect({ detail: id });
+  $: commands = [
+    { group: 'Git', title: 'Bugün', hint: 'Odak, takvim, hava durumu', icon: 'calendar', run: () => go('today') },
+    { group: 'Git', title: 'Geçmiş', hint: 'Tamamlanan görevler', icon: 'clock', run: () => go('history') },
+    { group: 'Git', title: 'Ayarlar', icon: 'settings', run: () => go('settings') },
+    { group: 'Git', title: 'Onay kuralları', hint: 'Ayarlar', icon: 'shield', keywords: 'rule kural', run: () => go('settings') },
+    ...sessions.map((s) => ({ group: 'Oturumlar', title: s.name, hint: s.status === 'working' ? 'Çalışıyor' : s.status === 'waiting' ? 'Bekliyor' : s.status === 'done' ? 'Tamamlandı' : 'Boşta', icon: 'bot', keywords: s.cwd, run: () => go(s.id) })),
+    ...sessions.filter((s) => s.agent !== 'cursor').map((s) => ({ group: 'Oturumlar', title: 'Mesaj gönder: ' + s.name, icon: 'message', keywords: 'yanıt reply', run: () => { go(s.id); localFocus = Date.now(); } })),
+    ...pending.filter((p) => !p.questions).flatMap((p) => [
+      { group: 'Onaylar', title: 'İzin ver: ' + p.tool, hint: p.summary, icon: 'check', keywords: 'allow', run: () => api('decide', p.id, 'allow') },
+      { group: 'Onaylar', title: 'Reddet: ' + p.tool, hint: p.summary, icon: 'x', keywords: 'deny', run: () => api('decide', p.id, 'deny') },
+    ]),
+    ...(timer
+      ? [
+        { group: 'Odak', title: timer.paused ? 'Zamanlayıcıyı sürdür' : 'Zamanlayıcıyı duraklat', icon: timer.paused ? 'play' : 'pause', run: () => api('timer', timer.paused ? 'resume' : 'pause') },
+        { group: 'Odak', title: '5 dakika ekle', icon: 'plus', run: () => api('timer', 'add') },
+        { group: 'Odak', title: 'Zamanlayıcıyı bitir', icon: 'x', run: () => api('timer', 'stop') },
+      ]
+      : [
+        { group: 'Odak', title: 'Odak başlat (' + (settings.focusMin || 25) + ' dk)', icon: 'timer', keywords: 'pomodoro focus', run: () => api('timer', 'focus') },
+        { group: 'Odak', title: 'Odak başlat (50 dk)', icon: 'timer', keywords: 'pomodoro focus', run: () => api('timer', 'focus', 50) },
+        { group: 'Odak', title: 'Mola (' + (settings.breakMin || 5) + ' dk)', icon: 'play', keywords: 'break', run: () => api('timer', 'break') },
+      ]),
+    { group: 'Uygulama', title: 'Takvimi yenile', icon: 'refresh', run: () => api('calendar', 'refresh') },
+    { group: 'Uygulama', title: 'Tüm durumları göster', hint: 'Demo', icon: 'sparkles', run: () => api('app', 'demo') },
+    { group: 'Uygulama', title: 'Oturumları temizle', icon: 'trash', run: () => api('app', 'clear') },
+  ];
 
   $: {
     if (!['today', 'settings', 'history'].includes(selectedId) && !sessions.some(s => s.id === selectedId)) {
@@ -54,6 +92,8 @@
   }
 </script>
 
+<svelte:window on:keydown={onWindowKey} />
+
 <div
   class="fluent-app-container {themeInfo.isDark ? 'fds-theme-dark' : 'fds-theme-light'}"
   style={accentStyles + shapeStyle}
@@ -73,22 +113,24 @@
     {:else if selectedId === 'history'}
       <HistoryView />
     {:else if selectedId === 'today' || !currentSession}
-      <TodayView {calendar} {timer} {usage} {settings} />
+      <TodayView {calendar} {timer} {usage} {settings} {weather} />
     {:else}
       <SessionDetail
         session={currentSession}
         {pending}
         {details}
         {conv}
-        {focusReply}
+        focusReply={replyToken}
         on:tabchange
       />
     {/if}
   </main>
+  <Palette open={paletteOpen} {commands} on:close={() => (paletteOpen = false)} />
 </div>
 
 <style>
   .fluent-app-container {
+    position: relative;
     width: 100%;
     height: 100%;
     display: flex;

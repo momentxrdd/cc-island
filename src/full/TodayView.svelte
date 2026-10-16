@@ -7,6 +7,30 @@
   export let timer = null;
   export let usage = null;
   export let settings = {};
+  export let weather = null;
+
+  const WMO = { 0: 'Açık', 1: 'Az bulutlu', 2: 'Parçalı bulutlu', 3: 'Kapalı', 45: 'Sisli', 48: 'Kırağılı sis', 51: 'Hafif çisenti', 53: 'Çisenti', 55: 'Yoğun çisenti',
+    56: 'Donan çisenti', 57: 'Donan çisenti', 61: 'Hafif yağmur', 63: 'Yağmur', 65: 'Şiddetli yağmur', 66: 'Donan yağmur', 67: 'Donan yağmur',
+    71: 'Hafif kar', 73: 'Kar', 75: 'Yoğun kar', 77: 'Kar taneleri', 80: 'Sağanak', 81: 'Sağanak', 82: 'Kuvvetli sağanak', 85: 'Kar sağanağı', 86: 'Kar sağanağı',
+    95: 'Gök gürültülü fırtına', 96: 'Dolu ile fırtına', 99: 'Dolu ile fırtına' };
+  function wxIcon(code, day) {
+    if (code == null) return 'wxCloud';
+    if (code <= 1) return day === false ? 'wxMoon' : 'wxSun';
+    if (code === 2) return day === false ? 'wxMoon' : 'wxPartly';
+    if (code === 3) return 'wxCloud';
+    if (code === 45 || code === 48) return 'wxFog';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'wxSnow';
+    if (code >= 95) return 'wxStorm';
+    return 'wxRain';
+  }
+  const dayName = (d, i) => (i === 0 ? 'Bugün' : i === 1 ? 'Yarın' : new Date(d + 'T12:00').toLocaleDateString('tr-TR', { weekday: 'short' }));
+  let cityDraft = '';
+  $: hasCity = !!settings.weatherCity;
+  function saveCity() { const c = cityDraft.trim(); if (c && window.ccApi) window.ccApi.setSetting('weatherCity', c); }
+
+  $: block = usage && usage.block ? usage.block.active : null;
+  $: peak = usage && usage.block ? usage.block.peak : 0;
+  const durHM = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' sa ' + (m % 60) + ' dk' : m + ' dk'; };
 
   let now = Date.now(), tick;
   onMount(() => { tick = setInterval(() => (now = Date.now()), 1000); });
@@ -146,6 +170,41 @@
     </div>
   </section>
 
+  <section class="td-card wx">
+    {#if !hasCity}
+      <div class="wx-empty">
+        <Icon name="wxPartly" size={28} />
+        <div class="wx-et"><h2>Hava durumu</h2><span>Şehrini yaz; kapsülde saatin yanında da görünür. Veriler Open-Meteo'dan, anahtar gerekmez.</span></div>
+        <input class="wx-in" bind:value={cityDraft} placeholder="ör. İstanbul" on:keydown={(e) => e.key === 'Enter' && saveCity()} aria-label="Şehir" />
+        <Button variant="accent" disabled={!cityDraft.trim()} on:click={saveCity}>Ekle</Button>
+      </div>
+    {:else if weather && weather.now}
+      <div class="wx-now">
+        <span class="wx-big"><Icon name={wxIcon(weather.now.code, weather.now.day)} size={44} /></span>
+        <div class="wx-t">
+          <b>{Math.round(weather.now.temp)}°</b>
+          <span>{WMO[weather.now.code] || ''} · {weather.place}</span>
+          <small>Hissedilen {Math.round(weather.now.feels)}° · Nem %{weather.now.humidity} · Rüzgâr {Math.round(weather.now.wind)} km/s</small>
+        </div>
+      </div>
+      <div class="wx-days">
+        {#each (weather.days || []).slice(0, 4) as d, i}
+          <div class="wx-d">
+            <span class="wx-dn">{dayName(d.date, i)}</span>
+            <Icon name={wxIcon(d.code, true)} size={20} />
+            <span class="wx-mm"><b>{Math.round(d.max)}°</b> {Math.round(d.min)}°</span>
+            {#if d.rain}<span class="wx-rain"><Icon name="drop" size={10} />%{d.rain}</span>{/if}
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div class="wx-empty">
+        <Icon name="wxCloud" size={28} />
+        <div class="wx-et"><h2>Hava durumu</h2><span>{weather && weather.error === 'notfound' ? '"' + settings.weatherCity + '" bulunamadı. Ayarlar\'dan şehri değiştir.' : weather && weather.error ? 'Hava durumu alınamadı.' : 'Yükleniyor…'}</span></div>
+      </div>
+    {/if}
+  </section>
+
   <section class="td-card cal">
     <div class="cal-h">
       <div class="cal-t">
@@ -217,6 +276,17 @@
       <div><span>Toplam token</span><b>{tok(u.tokens)}</b></div>
       <div><span>Çıktı token</span><b>{tok(u.output)}</b></div>
       <div><span>İstek</span><b>{u.calls || 0}</b></div>
+    </div>
+    <div class="blk">
+      <div class="blk-h">
+        <Icon name="gauge" size={16} />
+        <b>5 saatlik pencere</b>
+        {#if block}<span>{durHM(block.resetIn)} sonra yenilenir</span>{:else}<span>Şu an açık bir pencere yok</span>{/if}
+      </div>
+      {#if block}
+        <div class="blk-bar" class:warn={block.pct >= 0.75} class:crit={block.pct >= 0.95}><i style="width:{Math.min(100, Math.round((block.pct || 0) * 100))}%"></i></div>
+        <p class="muted blk-t">{money(block.cost)} · {tok(block.tokens)} token · {block.calls} istek{#if block.pct != null} · son 8 günün en yoğun penceresinin %{Math.round(block.pct * 100)}'i{/if}</p>
+      {/if}
     </div>
     {#if usage && usage.unpriced && usage.unpriced.length}<p class="muted warn">Fiyatı bilinmeyen model: {usage.unpriced.join(', ')}</p>{/if}
   </section>
@@ -318,6 +388,34 @@
   .u-h { display: flex; align-items: center; gap: 10px; color: var(--fds-text-primary); margin-bottom: 10px; }
   .u-h span { margin-left: auto; font-size: 12px; color: var(--fds-text-secondary); }
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .blk { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--fds-divider-stroke-default, rgba(255,255,255,.08)); }
+  .blk-h { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fds-text-primary); }
+  .blk-h span { margin-left: auto; font-size: 12px; color: var(--fds-text-secondary); }
+  .blk-bar { height: 6px; margin: 8px 0 6px; border-radius: 3px; background: var(--fds-control-strong-stroke-disabled, rgba(255,255,255,.12)); overflow: hidden; }
+  .blk-bar i { display: block; height: 100%; border-radius: inherit; background: var(--fds-accent-default, #60cdff); transition: width .6s ease; }
+  .blk-bar.warn i { background: #fce100; }
+  .blk-bar.crit i { background: #ff99a4; }
+  .blk-t { font-size: 12px; }
+
+  .wx { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .wx-now { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 220px; }
+  .wx-big { color: var(--fds-accent-default, #60cdff); display: grid; }
+  .wx-t { display: flex; flex-direction: column; min-width: 0; }
+  .wx-t b { font-family: var(--fds-font-family-display, 'Segoe UI Variable Display', 'Segoe UI', sans-serif); font-size: 34px; line-height: 38px; font-weight: 600; color: var(--fds-text-primary); }
+  .wx-t span { font-size: 13px; color: var(--fds-text-primary); }
+  .wx-t small { font-size: 12px; color: var(--fds-text-secondary); }
+  .wx-days { display: flex; gap: 4px; }
+  .wx-d { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 62px; padding: 6px 0; border-radius: 6px; color: var(--fds-text-secondary);
+    background: var(--fds-subtle-fill-secondary, rgba(255,255,255,.04)); }
+  .wx-dn { font-size: 12px; text-transform: capitalize; }
+  .wx-mm { font-size: 12px; } .wx-mm b { color: var(--fds-text-primary); font-weight: 600; }
+  .wx-rain { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: #8ab4f8; }
+  .wx-empty { display: flex; align-items: center; gap: 14px; flex: 1; flex-wrap: wrap; color: var(--fds-text-secondary); }
+  .wx-et { flex: 1; min-width: 180px; display: flex; flex-direction: column; }
+  .wx-et span { font-size: 12px; line-height: 16px; }
+  .wx-in { height: 32px; width: 160px; box-sizing: border-box; padding: 0 10px; border: 0; border-radius: 4px; font: inherit; font-size: 13px; color: var(--fds-text-primary);
+    background: var(--fds-control-fill-default, rgba(255,255,255,.06)); box-shadow: inset 0 0 0 1px var(--fds-control-stroke-default, rgba(255,255,255,.07)), inset 0 -1px 0 var(--fds-control-strong-stroke-default, rgba(255,255,255,.4)); outline: none; }
+  .wx-in:focus { box-shadow: inset 0 0 0 1px var(--fds-control-stroke-default, rgba(255,255,255,.07)), inset 0 -2px 0 var(--fds-accent-default, #60cdff); }
   .stats div { display: flex; flex-direction: column; }
   .stats span { font-size: 12px; line-height: 16px; color: var(--fds-text-secondary); }
   .stats b { font-size: 20px; line-height: 28px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fds-text-primary); }

@@ -77,7 +77,13 @@ public static class CcFs {
     if (pid == selfPid) return "0";
     var sb = new StringBuilder(64); GetClassName(h, sb, 64);
     string cls = sb.ToString();
-    if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd") return "0";
+    if (System.Array.IndexOf(new[] { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "XamlExplorerHostIslandWindow", "MultitaskingViewFrame",
+      "ForegroundStaging", "TaskSwitcherWnd", "TaskListThumbnailWnd", "Windows.UI.Core.CoreWindow", "Shell_InputSwitchTopLevelWindow",
+      "TopLevelWindowForOverflowXamlIsland", "NotifyIconOverflowWindow", "Xaml_WindowedPopupClass", "LockScreenControllerProxyWindow", "#32768" }, cls) >= 0) return "0";
+    try {
+      var name = System.Diagnostics.Process.GetProcessById(pid).ProcessName.ToLowerInvariant();
+      if (System.Array.IndexOf(new[] { "explorer", "shellexperiencehost", "startmenuexperiencehost", "searchhost", "searchapp", "lockapp", "textinputhost", "dwm", "logonui", "shellhost", "widgets" }, name) >= 0) return "0";
+    } catch {}
     RECT r; if (!GetWindowRect(h, out r)) return "0";
     var mi = new MONITORINFO(); mi.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
     if (!GetMonitorInfo(MonitorFromWindow(h, 2), ref mi)) return "0";

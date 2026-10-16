@@ -50,7 +50,7 @@
 
 <style>
   .composer {
-    position: sticky; bottom: -16px; margin: 0 -20px -16px; padding: 10px 20px 12px; z-index: 2;
+    flex: none; padding: 10px 20px 12px;
     background: var(--fds-solid-background-base, #202020);
     border-top: 1px solid var(--fds-divider-stroke-default, rgba(255,255,255,.08));
   }

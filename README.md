@@ -63,7 +63,12 @@
 
 ## Installation
 
-Prebuilt Windows download: [Releases](https://github.com/momentxrdd/cc-island/releases/latest). Unzip it, run `CC Island.exe`, then install the hooks as described below (the hooks need [Node.js](https://nodejs.org/)).
+Prebuilt Windows download: [Releases](https://github.com/momentxrdd/cc-island/releases/latest).
+
+- **Installer** (`CC-Island-Setup-<version>.exe`): installs per user, adds Start menu and desktop shortcuts, connects the Claude Code hooks (and any agent already connected) and removes them again on uninstall. Node.js is not required: without it the hooks run through the bundled helper.
+- **Portable zip**: unzip, run `CC Island.exe`, then install the hooks as described below (needs [Node.js](https://nodejs.org/)).
+
+Build them yourself with `npm run dist:setup` (installer, output in `release/`) or `npm run build` (portable zip, output in `dist/`).
 
 
 ```bash

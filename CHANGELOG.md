@@ -17,6 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Windows focus sessions.** Starting focus on the island also starts Windows focus (Do Not Disturb); a focus started from Windows shows on the island.
 - **Full-screen apps.** The island hides while a game, full-screen video or presentation is running on its monitor (or shows only approvals). Exclusive full-screen games always hide it.
 - **Markdown** in Claude's last message and in the conversation view.
+- **Windows installer** (`npm run dist:setup`, NSIS): per-user install, shortcuts, connects the hooks on install and removes them on uninstall. Works without Node.js: hooks then run through `cc-helper.exe hook`, which starts the app executable in Node mode.
+- **Context meter.** A thin bar under the capsule and in the session view shows how full the context window is; alerts at 80% and 95%.
+- **5-hour window.** Usage of the current 5-hour block (cost, tokens, reset countdown), compared with your busiest block of the last 8 days.
+- **Diffs for approvals.** Edit, MultiEdit, Write and Codex patches show a line-numbered, colored diff on the island card and in the full view.
+- **Stuck alerts.** A notification when a tool runs longer than a set time, nothing happens for a while, or the same step repeats three times.
+- **Command palette** (`Ctrl+K`, or `Ctrl+Alt+Space` from anywhere): jump to pages and sessions, message a session, approve or deny, control the timer.
+- **Clock and weather.** A clock and the current weather in the idle capsule, and a forecast card on the Today page (Open-Meteo, only when a city is set).
 - Per-element corner radius, multi-pending approval navigation (‹ 2/3 ›, allow / deny all), split-flap status text.
 - Today panel with Pomodoro timer and Claude usage summary; calendar and timer chips in the capsule.
 - System indicators for volume, brightness and battery.
@@ -24,12 +31,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Settings for sounds, music source (Spotify only / any player), monitor and start with Windows.
 
 ### Changed
+- The island now stays on screen when no agent is running (sleeping mascot, clock, weather) and no longer quits itself after being auto-started. The previous behavior is available as Settings → "When no agent is running" → Hide, or from the tray menu.
 - **Native helper.** `bin/cc-helper.exe` (C++/WinRT, built by `npm install` when Visual Studio Build Tools are present) replaces the PowerShell media and system watchers: about 3 MB each instead of about 80 MB. Without the compiler the app falls back to the PowerShell scripts.
 - The Svelte UI builds to `ui/` (`npm run build:ui`), so `npm run build` can keep using `dist/` for the portable package. The package now includes the new files and the native helper.
 
 ### Fixed
 - High idle CPU: hidden views (notification, hover card, full panel) kept animating at the monitor's refresh rate. They are now suspended after fading out, and the rotating border only runs while visible (renderer about 31% → 7% of one core on a 144 Hz display).
 - Hover flicker caused by resizing the transparent window between the capsule and the hover card.
+- The island briefly disappeared on Alt+Tab: Windows shell windows (task switcher, Start, search, lock screen) were taken for full-screen apps. They are now ignored and full-screen changes are debounced.
+- The full view could not receive keyboard input (the window was never focusable), and typing a space in a text field collapsed the island.
 - Corner radius and timer sliders now save while dragging.
 - Clicking the music progress bar did not seek; the play/pause icon now flips immediately.
 - `uninstall-hooks` missed hooks when the project folder had a different name.
