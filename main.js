@@ -61,6 +61,7 @@ let settings = { motion: 'on', lang: 'auto', sound: 'on', media: 'spotify', disp
   calSystem: 'on',
   focusSync: 'on',
   gameMode: 'hide',
+  idle: 'show',
   rules: [],
   stuckMin: 5,
   clock: 'on',
@@ -68,7 +69,7 @@ let settings = { motion: 'on', lang: 'auto', sound: 'on', media: 'spotify', disp
   weatherLoc: null };
 const SCHEMA = {
   lang: ['auto', 'en', 'tr'], motion: ['on', 'system', 'off'], sound: ['on', 'important', 'off'], media: ['spotify', 'all', 'off'],
-  display: ['primary', 'cursor'], osd: ['on', 'off'], pet: ['on', 'off'], calSystem: ['on', 'off'], focusSync: ['on', 'off'], gameMode: ['hide', 'important', 'off'], autoBreak: [true, false], shape: ['notch', 'pill'],
+  display: ['primary', 'cursor'], osd: ['on', 'off'], pet: ['on', 'off'], calSystem: ['on', 'off'], focusSync: ['on', 'off'], gameMode: ['hide', 'important', 'off'], idle: ['show', 'hide'], autoBreak: [true, false], shape: ['notch', 'pill'],
   focusMin: { min: 5, max: 180 }, breakMin: { min: 1, max: 60 }, longBreakMin: { min: 5, max: 60 }, radius: { min: 0, max: 150 },
   notchHeight: { min: 28, max: 44 }, notchWidth: { min: 80, max: 240 }, notchLabel: { min: 60, max: 280 },
   radiusCompact: { min: 0, max: 150 }, radiusOverlay: { min: 0, max: 150 }, radiusPeek: { min: 0, max: 150 }, radiusFull: { min: 0, max: 150 },
@@ -120,7 +121,7 @@ function setSetting(k, v) {
   if (k === 'display' && win) place();
   if (k === 'osd' || k === 'focusSync') system.setActive(v !== 'off' || settings.osd !== 'off' || settings.focusSync === 'on');
   if (k === 'calendarUrl' || k === 'calSystem') refreshCalendar();
-  if (k === 'gameMode') syncVisibility();
+  if (k === 'gameMode' || k === 'idle') syncVisibility();
   if (k === 'weatherCity') { settings.weatherLoc = null; refreshWeather(true); }
   if (k === 'focusSync') { if (v === 'off' && winFocusOurs) WIN.focus(false); syncFocusWatch(); }
   if (k === 'accentColor') send('theme-changed', getThemeInfo());
@@ -612,7 +613,7 @@ function held() {
   return holds.size > 0;
 }
 const busyVisible = () => sessions.size > 0 || pending.size > 0 || !!timer || calSoon();
-const wantVisible = () => busyVisible() || held();
+const wantVisible = () => settings.idle !== 'hide' || busyVisible() || held();
 let game = { active: false, d3d: false, mon: null }, gameSent = null;
 let gameRaw = null, gameT = null;
 function onGame(g) {
@@ -906,6 +907,10 @@ function trayMenu() {
       radio(T('tray.mediaSpotify'), settings.media === 'spotify', () => setSetting('media', 'spotify')),
       radio(T('tray.mediaAll'), settings.media === 'all', () => setSetting('media', 'all')),
       radio(T('tray.mediaOff'), settings.media === 'off', () => setSetting('media', 'off')),
+    ] },
+    { label: T('tray.idle'), submenu: [
+      radio(T('tray.idleShow'), settings.idle !== 'hide', () => setSetting('idle', 'show')),
+      radio(T('tray.idleHide'), settings.idle === 'hide', () => setSetting('idle', 'hide')),
     ] },
     { label: T('tray.game'), submenu: [
       radio(T('tray.gameHide'), settings.gameMode === 'hide', () => setSetting('gameMode', 'hide')),

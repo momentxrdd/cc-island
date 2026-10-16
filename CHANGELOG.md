@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Settings for sounds, music source (Spotify only / any player), monitor and start with Windows.
 
 ### Changed
+- The island now stays on screen when no agent is running (sleeping mascot, clock, weather) and no longer quits itself after being auto-started. The previous behavior is available as Settings → "When no agent is running" → Hide, or from the tray menu.
 - **Native helper.** `bin/cc-helper.exe` (C++/WinRT, built by `npm install` when Visual Studio Build Tools are present) replaces the PowerShell media and system watchers: about 3 MB each instead of about 80 MB. Without the compiler the app falls back to the PowerShell scripts.
 - The Svelte UI builds to `ui/` (`npm run build:ui`), so `npm run build` can keep using `dist/` for the portable package. The package now includes the new files and the native helper.
 

@@ -72,6 +72,7 @@
   $: pull('media', settings.media);
   $: pull('display', settings.display);
   $: pull('gameMode', settings.gameMode || 'hide');
+  $: pull('idle', settings.idle || 'show');
   $: pull('accentMode', settings.accentColor ? 'manual' : 'auto');
 
   function push(key, value, settingKey = key) {
@@ -85,6 +86,7 @@
   $: push('media', d.media);
   $: push('display', d.display);
   $: push('gameMode', d.gameMode);
+  $: push('idle', d.idle);
   $: if (d.accentMode !== synced.accentMode) {
     synced.accentMode = d.accentMode;
     setSetting('accentColor', d.accentMode === 'auto' ? '' : (settings.accentColor || '#0078D7'));
@@ -307,6 +309,13 @@
   <section>
     <h2>Oyun ve tam ekran</h2>
     <div class="cards">
+      <SettingsCard icon="eye" title="Ajan çalışmıyorken"
+        desc="Göster: ada boştayken de ekranda kalır (uyuyan maskot, saat, hava durumu) ve kendini kapatmaz. Gizle: oturum yokken çekilir, otomatik başlatıldıysa bir süre sonra kapanır.">
+        <SegmentedControl bind:value={d.idle}>
+          <SegmentedControlButton value="show">Göster</SegmentedControlButton>
+          <SegmentedControlButton value="hide">Gizle</SegmentedControlButton>
+        </SegmentedControl>
+      </SettingsCard>
       <SettingsCard icon="monitor" title="Tam ekran uygulamalarda"
         desc="Adanın ekranında oyun, tam ekran video ya da sunum açıkken. Özel tam ekran oyunlarda ada her zaman çekilir, oyun simge durumuna küçülmesin diye.">
         <SegmentedControl bind:value={d.gameMode}>
