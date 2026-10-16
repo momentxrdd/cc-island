@@ -1,4 +1,3 @@
-// tray.png (16x16 turuncu daire) üretir
 const z = require('zlib'), fs = require('fs'), path = require('path');
 const W = 16, raw = Buffer.alloc((W * 4 + 1) * W);
 for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {

@@ -1,10 +1,9 @@
-// Spotify (Windows SMTC) izleyicisi: media.ps1'i çalıştırır, JSON satırlarını durum olarak yayınlar, komut gönderir.
-const { spawn } = require('child_process');
-const path = require('path');
+const { spawnWatcher } = require('./lib/helper');
 
 class MediaWatcher {
-  constructor(onUpdate) {
+  constructor(onUpdate, source = 'spotify') {
     this.onUpdate = onUpdate;
+    this.source = source;
     this.proc = null;
     this.active = false;
     this.buf = '';
@@ -14,12 +13,17 @@ class MediaWatcher {
     this.state = null;
   }
 
-  // yalnızca ada görünürken çalışır (gereksiz CPU yok)
   setActive(on) {
     if (on === this.active) return;
     this.active = on;
     if (on) this._start();
     else this._stop();
+  }
+
+  setSource(source) {
+    if (source === this.source) return;
+    this.source = source;
+    if (this.active) { this._stop(); this.active = true; this._start(); }
   }
 
   send(cmd) {
@@ -29,13 +33,15 @@ class MediaWatcher {
 
   _start() {
     if (this.proc) return;
-    const p = spawn('powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'media.ps1')],
-      { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+    const p = spawnWatcher('media', { source: this.source === 'all' ? 'all' : 'spotify' });
     this.proc = p;
     const startedAt = Date.now();
+    p.stderr.on('data', (d) => {
+      console.log(`[MediaWatcher stderr] ${d}`);
+    });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d) => {
+      if (this.proc !== p) return;
       this.buf += d;
       let i;
       while ((i = this.buf.indexOf('\n')) >= 0) {
@@ -46,10 +52,10 @@ class MediaWatcher {
     });
     p.stdin.on('error', () => {});
     p.on('exit', () => {
-      if (this.proc === p) this.proc = null;
+      if (this.proc && this.proc !== p) return;
+      this.proc = null;
       this.buf = '';
       if (!this.active) return;
-      // hızlı çöküyorsa üstel geri çekilme (en çok 30 sn)
       this.fails = Date.now() - startedAt < 5000 ? this.fails + 1 : 0;
       clearTimeout(this.restartTimer);
       this.restartTimer = setTimeout(() => { if (this.active) this._start(); }, Math.min(30000, 1000 * 2 ** this.fails));
@@ -72,7 +78,7 @@ class MediaWatcher {
     let o;
     try { o = JSON.parse(line); } catch { return; }
     if (o.none) { this.state = null; this.art = null; this.onUpdate(null); return; }
-    if ('art' in o) this.art = o.art; // yalnızca parça değişince gelir
+    if ('art' in o) this.art = o.art;
     delete o.art;
     this.state = o;
     this.onUpdate({ ...o, art: this.art });

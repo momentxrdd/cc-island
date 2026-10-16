@@ -3,6 +3,41 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Other AI coding agents.** OpenAI Codex CLI, Gemini CLI and Cursor sessions show up next to Claude Code, each with its own label. Codex approvals work from the island. Hooks are connected per agent from Settings → AI tools, or with `node install-hooks.js --agent=<name>`.
+- **Animated mascot** ([clawd-pet](https://github.com/abderrahimghazali/clawd-pet), MIT). It changes with the work being done: typing for edits, reading for searches, testing, pushing, deploying, juggling several sessions, waiting for approval, celebrating when a task finishes, sleeping when idle. Shown in the capsule, notifications, the hover list and the full view; can be turned off.
+- **Reply from the island.** A composer at the bottom of each session and a Reply button on the "completed" notification send a message straight to the agent's terminal.
+- **Approval rules.** Allow or block requests automatically by tool, pattern (`npm test*`, `src/*`, `https://docs.example.com/*`) and project. A ⚡ button on the permission card adds an "always allow in this project" rule. Wildcard allow rules never approve chained or redirected shell commands.
+- **Task summaries and history.** The completed notification shows duration, tool count, files changed and errors. A History page keeps the last 300 tasks with search and daily totals.
+- **Windows Settings-style full view** built with Svelte and fluent-svelte-extra: navigation pane, settings cards, system theme and Windows accent color (or a custom one).
+- **Appearance settings:** notch or floating pill shape, notch height / width / label length, per-element corner radius, live preview.
+- **Windows calendar.** Events from the accounts added to Windows (Outlook, Microsoft 365, Google, iCloud), merged with an optional iCal link. Month grid with day-by-day agenda and Join buttons.
+- **Windows focus sessions.** Starting focus on the island also starts Windows focus (Do Not Disturb); a focus started from Windows shows on the island.
+- **Full-screen apps.** The island hides while a game, full-screen video or presentation is running on its monitor (or shows only approvals). Exclusive full-screen games always hide it.
+- **Markdown** in Claude's last message and in the conversation view.
+- Per-element corner radius, multi-pending approval navigation (‹ 2/3 ›, allow / deny all), split-flap status text.
+- Today panel with Pomodoro timer and Claude usage summary; calendar and timer chips in the capsule.
+- System indicators for volume, brightness and battery.
+- Answer `AskUserQuestion` prompts from the island.
+- Settings for sounds, music source (Spotify only / any player), monitor and start with Windows.
+
+### Changed
+- **Native helper.** `bin/cc-helper.exe` (C++/WinRT, built by `npm install` when Visual Studio Build Tools are present) replaces the PowerShell media and system watchers: about 3 MB each instead of about 80 MB. Without the compiler the app falls back to the PowerShell scripts.
+- The Svelte UI builds to `ui/` (`npm run build:ui`), so `npm run build` can keep using `dist/` for the portable package. The package now includes the new files and the native helper.
+
+### Fixed
+- High idle CPU: hidden views (notification, hover card, full panel) kept animating at the monitor's refresh rate. They are now suspended after fading out, and the rotating border only runs while visible (renderer about 31% → 7% of one core on a 144 Hz display).
+- Hover flicker caused by resizing the transparent window between the capsule and the hover card.
+- Corner radius and timer sliders now save while dragging.
+- Clicking the music progress bar did not seek; the play/pause icon now flips immediately.
+- `uninstall-hooks` missed hooks when the project folder had a different name.
+
+### Security
+- The local server rejects browser requests (Origin header, non-JSON content type) and bodies over 2 MB.
+- Links in rendered Markdown open in the default browser and only for `http`, `https` and `mailto`; raw HTML is never rendered.
+
 ## [1.0.0] - 2026-10-15
 
 First public release.

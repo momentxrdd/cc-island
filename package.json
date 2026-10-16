@@ -22,6 +22,7 @@
   },
   "files": [
     "assets",
+    "lib",
     "*.js",
     "*.ps1",
     "*.html",
@@ -29,13 +30,26 @@
     "tray.png"
   ],
   "scripts": {
+    "prestart": "node scripts/build-native.js && vite build",
     "start": "electron .",
+    "watch": "vite build --watch",
+    "postinstall": "node scripts/build-native.js && vite build",
     "install-hooks": "node install-hooks.js",
     "uninstall-hooks": "node install-hooks.js --remove",
     "make-tray": "node make-tray.js",
-    "build": "node scripts/build-win.js"
+    "build": "node scripts/build-win.js",
+    "build:ui": "vite build",
+    "build:native": "node scripts/build-native.js"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "@fluentui/svg-icons": "^1.1.344",
+    "@sveltejs/vite-plugin-svelte": "^3.1.2",
+    "electron": "^33.0.0",
+    "fluent-svelte-extra": "^2.2.5",
+    "sass": "^1.105.1",
+    "svelte": "^4.2.20",
+    "svelte-preprocess": "^5.1.4",
+    "typescript": "^6.0.3",
+    "vite": "^5.4.21"
   }
 }

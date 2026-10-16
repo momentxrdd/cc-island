@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 const L = (key, vars) => I18N.t(key, vars);
 const LP = (key, n, vars) => I18N.plural(key, n, vars);
 const S = { sessions: [], pending: [], sel: null, tab: 'act', open: new Set(), details: {}, conv: {}, lastInd: 0,
-  prevTiles: {}, scroll: {}, errSeen: {}, doneId: {} };
+  prevTiles: {}, scroll: {}, errSeen: {}, doneId: {}, ans: {}, settings: {}, calendar: null, timer: null, usage: null, themeInfo: { isDark: true, accent: null } };
 let island = null;
 const schedule = () => island && island.refresh();
 
@@ -24,7 +24,6 @@ const clock = (ts) => (ts ? new Date(ts).toLocaleTimeString(I18N.locale, { hour:
 const sorted = () => [...S.sessions].sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.updated - a.updated);
 const selSession = () => S.sessions.find((x) => x.id === S.sel);
 
-// ---------- giriş animasyonu takibi ----------
 const seen = new Set();
 let frame = new Set(), idx = 0;
 const en = (key) => {
@@ -33,8 +32,8 @@ const en = (key) => {
   return ` enter" style="--d:${Math.min(idx++, 14) * 40}ms`;
 };
 const forget = (prefix) => { for (const k of [...seen]) if (k.startsWith(prefix)) seen.delete(k); };
+const withFrame = (fn) => (...a) => { try { return fn(...a); } finally { for (const k of frame) seen.add(k); frame.clear(); idx = 0; } };
 
-// ---------- parçalar ----------
 const eq = '<span class="eq"><i></i><i></i><i></i><i></i></span>';
 
 function liveLine(s) {
@@ -45,6 +44,7 @@ function liveLine(s) {
 }
 
 function permCard(p, withName, ns) {
+  if (p.questions) return questionCard(p, withName, ns);
   const s = S.sessions.find((x) => x.id === p.session_id);
   return `<div class="perm${en(`${ns}:perm:${p.id}`)}">
     <div class="perm-h"><span class="lk wiggle">${ic('lock', 18)}</span><b>${esc(withName && s ? s.name : L('ui.permission'))}</b>
@@ -61,7 +61,66 @@ function permCard(p, withName, ns) {
   </div>`;
 }
 
-// ---------- ayrıntı gövdeleri ----------
+const needsSubmit = (qs) => qs.length > 1 || qs.some((q) => q.multiSelect);
+const picks = (pid, qs) => (S.ans[pid] = S.ans[pid] || qs.map(() => []));
+
+function questionBody(pid, qs) {
+  const sel = picks(pid, qs);
+  const ready = sel.every((a) => a.length);
+  return qs.map((q, qi) => `<div class="q">
+      ${q.header || q.multiSelect ? `<div class="q-top">${q.header ? `<span class="q-chip">${esc(q.header)}</span>` : ''}${q.multiSelect ? `<span class="q-hint">${L('ui.multi')}</span>` : ''}</div>` : ''}
+      <div class="q-t">${esc(q.question)}</div>
+      <div class="q-opts" role="${q.multiSelect ? 'group' : 'radiogroup'}">${q.options.map((o, oi) => {
+        const on = sel[qi].includes(o.label);
+        return `<button class="qopt${on ? ' on' : ''}${q.multiSelect ? ' multi' : ''}" data-qopt="${pid}:${qi}:${oi}" role="${q.multiSelect ? 'checkbox' : 'radio'}" aria-checked="${on}">
+          <span class="qx">${on ? ic('check', 11) : ''}</span><span class="ql"><b>${esc(o.label)}</b>${o.description ? `<small>${esc(o.description)}</small>` : ''}</span></button>`;
+      }).join('')}</div></div>`).join('') +
+    `<div class="btns q-btns">${needsSubmit(qs) ? `<button class="b-allow" data-qsubmit="${pid}"${ready ? '' : ` disabled title="${esc(L('ui.pickAll'))}"`}>${ic('check', 15)}${L('ui.submit')}</button>` : ''}
+      <button class="b-ghost" data-act="terminal" data-id="${pid}">${ic('terminal', 15)}${L('ui.answerTerminal')}</button></div>`;
+}
+
+function questionCard(p, withName, ns) {
+  const s = S.sessions.find((x) => x.id === p.session_id);
+  return `<div class="perm qcard${en(`${ns}:perm:${p.id}`)}">
+    <div class="perm-h"><span class="lk">${ic('help', 18)}</span><b>${esc(withName && s ? s.name : L('ui.question'))}</b>
+      <span class="time push" data-since="${p.ts}">${fmt(Date.now() - p.ts)}</span></div>
+    ${questionBody(p.id, p.questions)}</div>`;
+}
+
+function sendAnswers(pid) {
+  const p = S.pending.find((x) => x.id === pid);
+  if (!p || !p.questions) return;
+  const sel = picks(pid, p.questions);
+  if (!sel.every((a) => a.length)) return;
+  const answers = {};
+  p.questions.forEach((q, qi) => { answers[q.question] = sel[qi].join(', '); });
+  delete S.ans[pid];
+  window.ccApi.decide(pid, 'answer', answers);
+}
+
+function pickOption(pid, qi, oi) {
+  const p = S.pending.find((x) => x.id === pid);
+  const q = p && p.questions && p.questions[qi];
+  const o = q && q.options[oi];
+  if (!o) return;
+  const sel = picks(pid, p.questions);
+  if (q.multiSelect) sel[qi] = sel[qi].includes(o.label) ? sel[qi].filter((l) => l !== o.label) : [...sel[qi], o.label];
+  else sel[qi] = [o.label];
+  if (!needsSubmit(p.questions)) return sendAnswers(pid);
+  schedule();
+}
+
+function navPerm(dir) {
+  const n = S.pending.length;
+  if (!n) return;
+  S.permIdx = (((S.permIdx || 0) + dir) + n) % n;
+  const p = S.pending[S.permIdx], s = S.sessions.find((v) => v.id === p.session_id);
+  const name = s ? s.name : L('ui.session');
+  island.update('perm', p.questions
+    ? { title: L('notif.question', { name }), text: '', badge: 'help', pid: p.id, hasSug: false, questions: p.questions, count: n, pi: S.permIdx, sid: p.session_id }
+    : { title: L('notif.permission', { name }), text: `${p.tool}  ${p.summary}`, badge: 'lock', pid: p.id, hasSug: p.hasSug, questions: null, count: n, pi: S.permIdx, sid: p.session_id });
+}
+
 function kvs(obj, skip = []) {
   const rows = Object.entries(obj || {}).filter(([k, v]) => !skip.includes(k) && v !== '' && v != null);
   return rows.length ? `<div class="kvs">${rows.map(([k, v]) =>
@@ -78,6 +137,8 @@ function inputHTML(tool, i) {
     case 'Edit': return kvs({ [L('block.file')]: i.file_path }) + blk(L('block.change'), diff(i.old_string, i.new_string), true);
     case 'MultiEdit': return kvs({ [L('block.file')]: i.file_path }) + (i.edits || []).map((e, n) => blk(L('block.edit', { n: n + 1 }), diff(e.old_string, e.new_string))).join('');
     case 'Write': return kvs({ [L('block.file')]: i.file_path }) + blk(L('block.content'), `<div class="code">${esc(i.content)}</div>`, true);
+    case 'AskUserQuestion': return (i.questions || []).map((q, n) => blk(q.header || L('ui.question') + ' ' + (n + 1),
+      `<div class="code">${esc(q.question)}\n${(q.options || []).map((o) => `  • ${esc(o.label)}${o.description ? ' — ' + esc(o.description) : ''}`).join('\n')}</div>`)).join('');
     case 'TodoWrite': return blk(L('sec.tasks'), `<div class="code">${(i.todos || []).map((t) => `[${esc(t.status)}] ${esc(t.content)}`).join('\n')}</div>`);
     case 'Prompt': return blk(L('block.request'), `<div class="code">${esc(i.prompt)}</div>`, true);
     case 'Task': case 'Agent': return kvs({ [L('block.description')]: i.description, [L('block.type')]: i.subagent_type }) +
@@ -161,9 +222,8 @@ function infoTab(s) {
   return h;
 }
 
-// ---------- tam panel ----------
-// değişmeyen bölümü yeniden kurmaz: animasyonlar ve kaydırma bozulmaz
-const cmpKey = (h) => h.replace(/ enter" style="--d:\d+ms/g, '').replace(/(data-(?:since|done)="\d+">)[^<]*/g, '$1');
+const cmpKey = (h) => h.replace(/ enter" style="--d:\d+ms/g, '').replace(/(data-(?:since|done|until|until-long)="\d+">|data-timer>)[^<]*/g, '$1')
+  .replace(/stroke-dashoffset:[\d.e-]+/g, '');
 function setHTML(el, html) {
   const k = cmpKey(html);
   if (el.__k === k) return false;
@@ -181,9 +241,8 @@ function ensureSkeleton(el) {
 function renderFull() {
   const el = $('full');
   const list = sorted();
-  if (!list.length) { el.innerHTML = '<div class="empty" style="padding:70px 0">' + ic('sparkles', 34) + '<span>' + L('ui.noSessions') + '</span></div>'; return; }
   if (!el.querySelector('.fullgrid')) { for (const k of [...seen]) if (k.startsWith('f:')) seen.delete(k); }
-  if (!S.sel || !list.find((s) => s.id === S.sel)) S.sel = list[0].id;
+  if (S.sel !== 'today' && S.sel !== 'settings' && !list.find((s) => s.id === S.sel)) S.sel = list.length ? list[0].id : 'today';
   const s = list.find((x) => x.id === S.sel);
   ensureSkeleton(el);
 
@@ -191,12 +250,31 @@ function renderFull() {
   const sideScroll = sideEl.scrollTop, bodyScroll = bodyEl.scrollTop;
 
   const footTools = list.reduce((n, x) => n + x.totalTools, 0);
-  const side = list.map((x) => '<div class="sitem' + (x.id === S.sel ? ' sel' : '') + en('f:s:' + x.id) + '" data-sel="' + esc(x.id) + '">' +
+  const side = todayItem(S.sel === 'today') + list.map((x) => '<div class="sitem' + (x.id === S.sel ? ' sel' : '') + en('f:s:' + x.id) + '" data-sel="' + esc(x.id) + '">' +
     '<span class="dot ' + x.status + '"></span><div class="meta"><div class="name">' + esc(x.name) + '</div>' +
     '<div class="sub">' + (x.current ? ic(toolMeta(x.current.tool)[0], 12) + esc(x.current.tool) : esc(statusText(x.status))) + '</div></div></div>').join('') +
-    mediaCard('side') + '<div class="side-foot"><span>' + LP('ui.sessions', list.length) + '</span><span>' + LP('ui.toolCalls', footTools) + '</span></div>';
+    '<div class="side-bottom">' + mediaCard('side') + settingsItem(S.sel === 'settings') +
+    '<div class="side-foot"><span>' + LP('ui.sessions', list.length) + '</span><span>' + LP('ui.toolCalls', footTools) + '</span></div></div>';
   if (setHTML(sideEl, side)) sideEl.scrollTop = sideScroll;
   syncMedia();
+  el.querySelector('.detail').classList.toggle('no-tabs', !s);
+
+  if (S.sel === 'settings') {
+    setHTML($('fHead'), settingsHead());
+    setHTML($('fPerm'), S.pending.map((p) => permCard(p, true, 'f')).join(''));
+    setHTML($('fTodos'), '');
+    setHTML($('fTabs'), '');
+    setBody(bodyEl, 'settings', settingsBody(), bodyScroll);
+    return;
+  }
+  if (!s) {
+    setHTML($('fHead'), todayHead());
+    setHTML($('fPerm'), S.pending.map((p) => permCard(p, true, 'f')).join(''));
+    setHTML($('fTodos'), '');
+    setHTML($('fTabs'), '');
+    setBody(bodyEl, 'today', todayBody(), bodyScroll);
+    return;
+  }
 
   const mine = S.pending.filter((p) => p.session_id === s.id);
   const others = S.pending.length - mine.length;
@@ -221,15 +299,15 @@ function renderFull() {
   el.querySelector('.ind').style.left = target * TAB_W + 'px';
   S.lastInd = target;
 
-  const body = S.tab === 'act' ? actTab(s) : S.tab === 'chat' ? chatTab(s) : infoTab(s);
-  const bodyKey = S.sel + ':' + S.tab;
+  setBody(bodyEl, S.sel + ':' + S.tab, S.tab === 'act' ? actTab(s) : S.tab === 'chat' ? chatTab(s) : infoTab(s), bodyScroll);
+}
+
+function setBody(bodyEl, bodyKey, body, bodyScroll) {
   const switched = bodyEl.__bk !== bodyKey;
   if (switched) { if (bodyEl.__bk) S.scroll[bodyEl.__bk] = bodyScroll; bodyEl.__k = null; bodyEl.__bk = bodyKey; }
   if (setHTML(bodyEl, body)) bodyEl.scrollTop = switched ? (S.scroll[bodyKey] || 0) : bodyScroll;
 }
 
-
-// ---------- veri çekme (ayrıntı + konuşma) ----------
 const inflight = new Set();
 function ensureData() {
   const s = selSession(); if (!s) return;
@@ -259,9 +337,6 @@ function fetchConv(sid) {
   });
 }
 
-// =====================================================================
-//  Adaptör: Claude Code oturum verisi  ->  DynamicIsland durumları
-// =====================================================================
 const RING_C = 75.4;
 const trClean = (t, n) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n);
 
@@ -275,61 +350,101 @@ function computeBase() {
     kind: work.length ? (progress != null ? 'progress' : 'loading') : 'idle',
     work: work.length, total: list.length, done: list.filter((s) => s.status === 'done').length,
     tool: one && one.current ? one.current.tool : '', name: one ? one.name : '', progress, wait: S.pending.length,
+    allQ: S.pending.length > 0 && S.pending.every((p) => p.questions),
   };
 }
 
-// ---------- compact: iskelet bir kez kurulur, sonra yalnızca değerler güncellenir (geçişler bozulmaz) ----------
+function setFlap(el, text) {
+  if (!$('island').dataset.motion || $('island').dataset.motion === 'reduced') { el.textContent = text; return; }
+  const chars = Array.from(text.slice(0, 28));
+  el.innerHTML = chars.length
+    ? chars.map((c, i) => `<span class="flap" style="--i:${Math.min(i, 14)}">${esc(c === ' ' ? '\u00a0' : c)}</span>`).join('')
+    : '';
+}
+
+const AGENT_LABEL = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini', cursor: 'Cursor' };
+const agentTag = (s) => (s.agent && s.agent !== 'claude' ? `<span class="ag ag-${s.agent}">${esc(AGENT_LABEL[s.agent] || s.agent)}</span>` : '');
+function agentTitle(list) {
+  const ids = [...new Set(list.map((s) => s.agent || 'claude'))];
+  return ids.length === 1 ? AGENT_LABEL[ids[0]] || ids[0] : L('ui.agents');
+}
+const sessionPet = (s) => CCPet.forState({ sessions: [s], pending: S.pending.filter((p) => p.session_id === s.id) });
+function overlayPet(item, isQ) {
+  if (isQ) return 'idea';
+  if (item.kind === 'success') return 'celebrating';
+  if (item.kind === 'error') return 'error';
+  if (item.kind === 'loading' || item.kind === 'progress') return 'working-thinking';
+  if (item.badge === 'timer') return 'working-typing';
+  return 'notification';
+}
+let petT = null;
+function syncPet(el) {
+  CCPet.set(el, CCPet.forState({ sessions: S.sessions, pending: S.pending }));
+  clearTimeout(petT);
+  const ms = CCPet.nextChange({ sessions: S.sessions });
+  if (ms) petT = setTimeout(schedule, ms);
+}
+
 function renderCompact(el) {
   if (!el.__r) {
     el.innerHTML = `<div class="cp" role="button" tabindex="0" aria-label="${esc(L('ui.aria.status'))}" data-m="idle">
-      <span class="cl"><svg class="ring" viewBox="0 0 28 28"><circle class="rt" cx="14" cy="14" r="12"/><circle class="rp" cx="14" cy="14" r="12"/></svg>${claudeIcon(21)}</span>
-      <span class="lb"></span><span class="tr"></span><span class="mu"><span class="mu-art" data-art></span><span class="wv"><i></i><i></i><i></i></span></span></div>`;
-    el.__r = { cp: el.firstElementChild, ring: el.querySelector('.ring'), lb: el.querySelector('.lb'), tr: el.querySelector('.tr'), mu: el.querySelector('.mu'), tk: '', lt: '' };
+      <span class="cl"><svg class="ring" viewBox="0 0 28 28"><circle class="rt" cx="14" cy="14" r="12"/><circle class="rp" cx="14" cy="14" r="12"/></svg>${claudeIcon(21)}${CCPet.html('idle-living', 30, 'cp-pet')}</span>
+      <span class="lb"></span><span class="tr"></span><span class="xw"></span><span class="mu"><span class="mu-art" data-art></span><span class="wv"><i></i><i></i><i></i></span></span></div>`;
+    el.__r = { cp: el.firstElementChild, pet: el.querySelector('.pet'), ring: el.querySelector('.ring'), lb: el.querySelector('.lb'), tr: el.querySelector('.tr'), xw: el.querySelector('.xw'), mu: el.querySelector('.mu'), tk: '', lt: '' };
   }
   const { cp, ring, lb, tr, mu } = el.__r;
   const b = computeBase();
   const m = b.wait ? 'attn' : b.work ? 'busy' : b.total ? 'ready' : 'idle';
   cp.dataset.m = m;
-  const text = m === 'attn' ? LP('ui.pending', b.wait) : m === 'busy' ? (b.tool ? `${b.tool} · ${b.name}` : LP('ui.running', b.work)) : m === 'ready' ? LP('ui.sessions', b.total) : '';
-  if (text !== el.__r.lt) { el.__r.lt = text; lb.textContent = text; if (text) { lb.classList.remove('swap'); void lb.offsetWidth; lb.classList.add('swap'); } }
-  const tk = m + (m === 'ready' && b.done ? 'd' : '');
+  const text = m === 'attn' ? (b.allQ ? LP('ui.questions', b.wait) : LP('ui.pending', b.wait)) : m === 'busy' ? (b.tool ? `${b.tool} · ${b.name}` : LP('ui.running', b.work)) : m === 'ready' ? LP('ui.sessions', b.total) : '';
+  if (text !== el.__r.lt) { el.__r.lt = text; setFlap(lb, text); }
+  const petOn = document.documentElement.dataset.pet !== 'off';
+  const tk = m + (m === 'ready' && b.done ? 'd' : '') + (m === 'attn' && b.allQ ? 'q' : '') + (petOn ? 'p' : '');
   if (tk !== el.__r.tk) {
     el.__r.tk = tk;
-    tr.innerHTML = m === 'busy' ? eq : m === 'attn' ? ic('lock', 14) : m === 'ready' ? (b.done ? ic('circleCheck', 15) : '<span class="dot"></span>') : '';
+    tr.innerHTML = m === 'busy' ? (petOn ? '' : eq) : m === 'attn' ? ic(b.allQ ? 'help' : 'lock', 14) : m === 'ready' ? (b.done ? ic('circleCheck', 15) : '<span class="dot"></span>') : '';
   }
   const showRing = m === 'busy' || m === 'attn';
   ring.classList.toggle('on', showRing);
   ring.classList.toggle('indet', showRing && b.progress == null);
   if (b.progress != null && showRing) ring.style.setProperty('--off', String(RING_C * (1 - b.progress)));
   cp.setAttribute('aria-label', L('ui.aria.compact', { text: text || L('ui.idle') }));
+  syncPet(el.__r.pet);
   mu.classList.toggle('on', !!(S.media && S.media.status === 'Playing'));
+  compactExtras(el.__r.xw);
   syncMedia();
 }
 
-// ---------- overlay: bildirim / loading / progress / success / error ----------
 const BADGES = { success: ['check', 'green'], error: ['alert', 'red'], notification: ['lock', 'amber'] };
 
+const BADGE_COLOR = { help: 'blue', calendar: 'blue', timer: 'green' };
 function renderOverlay(el, item) {
   if (!item) return;
+  if (item.kind === 'level') return renderLevel(el, item);
   const hasSug = !!item.hasSug;
-  const key = `${item.id}:${item.kind}:${!!item.actions}:${hasSug}`;
+  const isQ = !!item.questions;
+  const nav = item.actions && item.count > 1;
+  const key = `${item.id}:${item.kind}:${!!item.actions}:${hasSug}:${item.pid || ''}:${isQ}:${item.buttons ? item.buttons.length : 0}:${nav ? item.count + ':' + item.bulkN : ''}`;
   if (el.__ik !== key) {
     el.__ik = key; el.__t1 = undefined;
-    const bd = item.kind === 'notification' ? [item.badge || 'alert', 'amber'] : BADGES[item.kind];
+    const bd = isQ ? ['help', 'blue'] : item.kind === 'notification' ? [item.badge || 'alert', BADGE_COLOR[item.badge] || 'amber'] : BADGES[item.kind];
     const ringOn = item.kind === 'loading' || item.kind === 'progress';
-    el.innerHTML = `<div class="ov k-${item.kind}" role="group">
+    el.innerHTML = `<div class="ov k-${isQ ? 'question' : item.kind}" role="group">
       <div class="ov-main">
-        <span class="tile">${ringOn ? '<svg class="ring on" viewBox="0 0 28 28"><circle class="rt" cx="14" cy="14" r="12"/><circle class="rp" cx="14" cy="14" r="12"/></svg>' : ''}${item.kind === 'music' ? `<span class="mp-art big" data-art>${ic('music', 22)}</span>` : claudeIcon(30)}
+        <span class="tile">${ringOn ? '<svg class="ring on" viewBox="0 0 28 28"><circle class="rt" cx="14" cy="14" r="12"/><circle class="rp" cx="14" cy="14" r="12"/></svg>' : ''}${item.kind === 'music' ? `<span class="mp-art big" data-art>${ic('music', 22)}</span>` : claudeIcon(30) + CCPet.html(overlayPet(item, isQ), 40, 'ov-pet')}
           ${bd ? `<span class="bd b-${bd[1]}">${ic(bd[0], 11, item.kind === 'success' ? 'tick' : '')}</span>` : ''}</span>
         <div class="ov-tx"><div class="t1"></div><div class="t2"></div>${ringOn ? '<div class="pg"><b></b></div>' : ''}</div>
-        <span class="ov-tr">${item.kind === 'music' ? WAVE : ''}</span>
+        ${nav ? `<span class="ov-nav"><button class="pn" data-permnav="prev" aria-label="${esc(L('ui.prevReq'))}">${ic('chevron', 14)}</button><b class="pn-c"></b><button class="pn pn-r" data-permnav="next" aria-label="${esc(L('ui.nextReq'))}">${ic('chevron', 14)}</button></span>` : `<span class="ov-tr">${item.kind === 'music' ? WAVE : ''}</span>`}
       </div>
-      ${item.actions ? `<div class="ov-ac">
+      ${item.buttons ? `<div class="ov-ac custom">${item.buttons.map((b) => `<button class="${b.cls}" ${b.attrs}>${b.icon ? ic(b.icon, 14) : ''}${esc(b.label)}</button>`).join('')}</div>` : ''}
+      ${isQ ? '<div class="ov-q"></div>' : item.actions ? `<div class="ov-ac">
         <button class="b-allow" data-act="allow">${ic('check', 14)}${L('ui.allow')}</button>
         <button class="b-deny" data-act="deny">${ic('x', 14)}${L('ui.deny')}</button>
         ${hasSug ? `<button class="b-always" data-act="always">${ic('shield', 14)}${L('ui.always')}</button>` : ''}
+        <button class="b-ghost sq" data-act="rule" title="${esc(L('ui.ruleAllow', { pattern: item.ruleHint || item.tool || '' }))}" aria-label="${esc(L('ui.ruleAllow', { pattern: item.ruleHint || item.tool || '' }))}">${ic('zap', 14)}</button>
         <button class="b-ghost sq" data-act="terminal" title="${esc(L('ui.askTerminal'))}" aria-label="${esc(L('ui.askTerminal'))}">${ic('terminal', 14)}</button>
-      </div>` : ''}</div>`;
+      </div>
+      ${!isQ && item.bulkN > 1 ? `<div class="ov-bulk"><button class="bb a" data-bulk="allow">${ic('check', 12)}${esc(L('ui.allowAll', { n: item.bulkN }))}</button><button class="bb d" data-bulk="deny">${ic('x', 12)}${esc(L('ui.denyAll', { n: item.bulkN }))}</button></div>` : ''}` : ''}</div>`;
   }
   const set = (sel, v) => { const n = el.querySelector(sel); if (n && n.textContent !== v) n.textContent = v; };
   const prevT1 = el.__t1; el.__t1 = item.title || '';
@@ -339,39 +454,74 @@ function renderOverlay(el, item) {
   const tr = el.querySelector('.ov-tr');
   const pct = item.progress != null ? Math.round(item.progress * 100) : null;
   const trText = pct != null ? pct + '%' : item.count > 1 ? '+' + (item.count - 1) : '';
-  if (item.kind !== 'music') { tr.textContent = trText; tr.classList.toggle('cnt', !!(item.count > 1 && pct == null)); }
+  const pnc = el.querySelector('.pn-c');
+  if (pnc) pnc.textContent = `${((item.pi || 0) + 1)}/${item.count}`;
+  if (item.kind !== 'music' && tr) { tr.textContent = trText; tr.classList.toggle('cnt', !!(item.count > 1 && pct == null)); }
   const ring = el.querySelector('.ring'), pg = el.querySelector('.pg');
   if (ring) { ring.classList.toggle('indet', pct == null); if (pct != null) ring.style.setProperty('--off', String(RING_C * (1 - item.progress))); }
   if (pg) { pg.classList.toggle('indet', pct == null); if (pct != null) pg.style.setProperty('--pg', pct + '%'); }
-  if (item.actions) el.querySelectorAll('[data-act]').forEach((b) => (b.dataset.id = String(item.pid)));
+  if (isQ) setHTML(el.querySelector('.ov-q'), questionBody(item.pid, item.questions));
+  else if (item.actions) el.querySelectorAll('[data-act]').forEach((b) => (b.dataset.id = String(item.pid)));
   el.querySelector('.ov').setAttribute('aria-label', `${item.title || ''}. ${item.text || ''}`);
   syncMedia();
 }
 
-// ---------- peek (hover) ----------
 function renderPeek(el) {
   const list = sorted();
   const rows = list.slice(0, 5).map((s) => {
     const t = s.status === 'done' ? ago(Date.now() - s.doneAt) : fmt(Date.now() - s.since);
-    return `<div class="row${en('p:r:' + s.id)}"><span class="dot ${s.status}"></span><div class="meta">
-      <div class="name">${esc(s.name)}</div><div class="sub">${liveLine(s)}</div></div>
+    return `<div class="row${en('p:r:' + s.id)}"><span class="dot ${s.status}"></span>${CCPet.html(sessionPet(s), 30, 'row-pet')}<div class="meta">
+      <div class="name">${esc(s.name)}${agentTag(s)}</div><div class="sub">${liveLine(s)}</div></div>
       <span class="time" data-${s.status === 'done' ? 'done' : 'since'}="${s.status === 'done' ? s.doneAt : s.since}">${t}</span></div>`;
   }).join('') || `<div class="empty${en('p:empty')}">${claudeIcon(30)}<span>${L('ui.noSessions')}</span></div>`;
-  setHTML(el, `<div class="pk"><div class="pk-h">${claudeIcon(16)}<b>Claude Code</b><span>${LP('ui.sessions', list.length)}</span></div>${mediaCard('peek')}${rows}
+  setHTML(el, `<div class="pk"><div class="pk-h">${claudeIcon(16)}<b>${esc(agentTitle(list))}</b><span>${LP('ui.sessions', list.length)}</span></div>${peekStrip()}${mediaCard('peek')}${rows}
     ${list.length ? `<div class="hint${en('p:hint')}">${ic('arrowRight', 12)} ${L('ui.clickDetails')}</div>` : ''}</div>`);
   syncMedia();
 }
 
-// ---------- full ----------
 function renderFullView() {
   const list = sorted();
   const w = list.filter((s) => s.status === 'working').length;
-  $('fbSub').textContent = LP('ui.sessions', list.length) + (w ? ' · ' + LP('ui.running', w) : '');
-  renderFull();
+  const fbSub = $('fbSub');
+  if (fbSub) fbSub.textContent = LP('ui.sessions', list.length) + (w ? ' · ' + LP('ui.running', w) : '');
+
+  if (window.CCFullView && window.CCFullView.mount) {
+    if (!['today', 'settings', 'history'].includes(S.sel) && !list.find((s) => s.id === S.sel)) {
+      S.sel = list.length ? list[0].id : 'today';
+    }
+    const s = list.find((x) => x.id === S.sel);
+    const props = {
+      sessions: list,
+      pending: S.pending,
+      selectedId: S.sel || 'today',
+      details: S.details,
+      conv: s ? S.conv[s.id] : null,
+      media: S.media,
+      calendar: S.calendar,
+      timer: S.timer,
+      usage: S.usage,
+      settings: S.settings,
+      themeInfo: S.themeInfo || { isDark: true, accent: null },
+      focusReply: S.focusReply || 0,
+    };
+    const instance = window.CCFullView.mount($('full'), props);
+    if (instance && !instance.__listenerAttached) {
+      instance.__listenerAttached = true;
+      instance.$on('select', (e) => {
+        S.sel = e.detail;
+        ensureData();
+      });
+      instance.$on('tabchange', (e) => {
+        S.tab = e.detail;
+        ensureData();
+      });
+    }
+  } else {
+    renderFull();
+  }
   ensureData();
 }
 
-// ---------- Spotify ----------
 const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const mediaPos = (m) => {
   if (!m) return 0;
@@ -380,13 +530,12 @@ const mediaPos = (m) => {
 };
 const WAVE = '<span class="wv"><i></i><i></i><i></i><i></i></span>';
 
-// kart HTML'i kararlıdır (zaman/ilerleme/kapak burada yok); onları syncMedia() yerinde günceller → yeniden çizimde titreme olmaz
 function mediaCard(kind) {
   const m = S.media;
   if (!m || !m.title) return '';
   const playing = m.status === 'Playing';
   return '<div class="mp mp-' + kind + '"><div class="mp-top"><span class="mp-art" data-art>' + ic('music', 20) + '</span>' +
-    '<div class="mp-tx"><div class="mp-t" title="' + esc(m.title) + '">' + esc(m.title) + '</div><div class="mp-a">' + esc(m.artist) + '</div></div>' + (playing ? WAVE : '') + '</div>' +
+    '<div class="mp-tx"><div class="mp-t" title="' + esc(m.title) + '">' + esc(m.title) + '</div><div class="mp-a">' + esc(m.artist) + (m.app && m.app !== 'Spotify' ? ' · ' + esc(m.app) : '') + '</div></div>' + (playing ? WAVE : '') + '</div>' +
     '<div class="mp-prog"' + (m.canSeek ? ' data-seek' : '') + ' role="progressbar" aria-label="' + esc(L('music.progress')) + '"><b data-mprog></b></div>' +
     '<div class="mp-times"><span data-mtime>0:00</span><span>' + mmss(m.durMs) + '</span></div>' +
     '<div class="mp-ctl"><button class="mc" data-media="prev" aria-label="' + esc(L('music.prev')) + '"' + (m.canPrev ? '' : ' disabled') + '>' + ic('skipBack', 16) + '</button>' +
@@ -400,6 +549,13 @@ function syncMedia() {
     if (el.__a !== art) { el.__a = art; el.style.backgroundImage = art ? 'url("' + art + '")' : ''; el.classList.toggle('has', !!art); }
   });
   const m = S.media;
+  const playing = !!m && m.status === 'Playing';
+  document.querySelectorAll('.cp .mu').forEach((el) => el.classList.toggle('on', playing && document.contains(el)));
+  document.querySelectorAll('.mp').forEach((el) => el.classList.toggle('paused', !!m && !playing));
+  document.querySelectorAll('[data-media="toggle"]').forEach((b) => {
+    if (b.__p !== playing) { b.__p = playing; b.innerHTML = ic(playing ? 'pauseF' : 'play', 18);
+      b.setAttribute('aria-label', playing ? L('music.pause') : L('music.play')); }
+  });
   if (!m) return;
   const p = mediaPos(m), d = m.durMs || 1;
   document.querySelectorAll('[data-mprog]').forEach((e) => { e.style.width = Math.min(100, (p / d) * 100) + '%'; });
@@ -418,7 +574,6 @@ function onMedia(m) {
   S.media = m && m.title ? m : null;
   S.art = m ? m.art : null;
   const key = S.media ? S.media.title + '|' + S.media.artist : '';
-  // parça değişince kısa bildirim. Art arda atlamada her ara parça için değil, yalnızca son parça sabit kalınca gösterilir
   if (S.media && S.media.status === 'Playing' && S.lastTrack !== undefined && key !== S.lastTrack) {
     clearTimeout(musicTimer);
     musicTimer = setTimeout(announceTrack, 700);
@@ -428,10 +583,33 @@ function onMedia(m) {
   syncMedia();
 }
 
-// ---------- olaylar ----------
-function beep(freqs) {
+let surfaceTimer = 0, surfaceToken = 0;
+const sendSurface = (v) => window.ccApi.surface && window.ccApi.surface(v);
+window.expandSoon = function () {
+  const token = ++surfaceToken;
+  sendSurface('expanding');
+  setTimeout(() => { if (token === surfaceToken && island && !island._dead) island.expand(); }, 60);
+};
+let surfaceObs = null;
+function initSurfaceObserver() {
+  if (surfaceObs) return;
+  surfaceObs = new MutationObserver(() => {
+    const v = $('island').dataset.view;
+    clearTimeout(surfaceTimer);
+    if (!v) return;
+    if (v === 'compact') surfaceTimer = setTimeout(() => { if (island && island.cur.view === 'compact') sendSurface('compact'); }, 750);
+    else sendSurface(v);
+  });
+  surfaceObs.observe($('island'), { attributes: true, attributeFilter: ['data-view'] });
+}
+let audio = null;
+function beep(freqs, important) {
+  if (S.sound === 'off' || (S.sound === 'important' && !important)) return;
+  if (S.game && !important) return;
   try {
-    const ctx = new AudioContext(); let t = ctx.currentTime;
+    const ctx = audio || (audio = new AudioContext());
+    if (ctx.state === 'suspended') ctx.resume();
+    let t = ctx.currentTime;
     freqs.forEach((f) => {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
@@ -441,19 +619,39 @@ function beep(freqs) {
   } catch {}
 }
 
-const doneText = (s) => trClean(s.lastText || s.prompt || L('ui.taskDone'), 110);
+function summaryLine(sum) {
+  if (!sum) return '';
+  const parts = [LP('sum.tools', sum.tools)];
+  if (sum.files && sum.files.length) parts.push(LP('sum.files', sum.files.length));
+  if (sum.errors) parts.push(LP('sum.errors', sum.errors));
+  return parts.join(' · ');
+}
+const doneText = (s) => {
+  const line = summaryLine(s.lastSummary);
+  const msg = trClean(s.lastText || s.prompt || L('ui.taskDone'), 110);
+  return line ? line + ' — ' + msg : msg;
+};
+const doneTitle = (s, name) => {
+  const sum = s && s.lastSummary;
+  return L('notif.done', { name }) + (sum && sum.end > sum.start ? ' · ' + fmt(sum.end - sum.start) : '');
+};
 
 function onState({ sessions, pending, notify }) {
-  S.sessions = sessions; S.pending = pending;
+  S.sessions = sessions; S.pending = pending; S.permIdx = S.permIdx || 0;
 
-  // kalıcı: izin isteği (çözülene kadar gösterilir)
   if (pending.length) {
-    const p = pending[0], s = sessions.find((x) => x.id === p.session_id);
-    island.push({ id: 'perm', kind: 'notification', persistent: true, priority: 10, title: L('notif.permission', { name: s ? s.name : L('ui.session') }),
-      text: `${p.tool}  ${p.summary}`, badge: 'lock', actions: true, pid: p.id, hasSug: p.hasSug, count: pending.length, sid: p.session_id });
-  } else island.dismiss('perm');
+    if (!Number.isFinite(S.permIdx) || S.permIdx >= pending.length) S.permIdx = 0;
+    const idx = Math.max(0, S.permIdx | 0), p = pending[idx], s = sessions.find((x) => x.id === p.session_id);
+    const name = s ? s.name : L('ui.session');
+    const bulkN = pending.filter((x) => !x.questions).length;
+    island.push(p.questions
+      ? { id: 'perm', kind: 'notification', persistent: true, priority: 10, title: L('notif.question', { name }), text: '',
+        badge: 'help', actions: true, pid: p.id, hasSug: false, questions: p.questions, count: pending.length, pi: idx, bulkN, sid: p.session_id }
+      : { id: 'perm', kind: 'notification', persistent: true, priority: 10, title: L('notif.permission', { name }),
+        text: `${p.tool}  ${p.summary}`, badge: 'lock', actions: true, pid: p.id, hasSug: p.hasSug, ruleHint: p.ruleHint, questions: null, count: pending.length, pi: idx, bulkN, sid: p.session_id });
+  } else { island.dismiss('perm'); S.permIdx = 0; }
+  for (const pid of Object.keys(S.ans)) if (!pending.some((p) => p.id === +pid)) delete S.ans[pid];
 
-  // hata: bir oturumun hata sayacı arttıysa
   for (const s of sessions) {
     const prev = S.errSeen[s.id];
     if (prev !== undefined && s.errors > prev) {
@@ -469,31 +667,66 @@ function onState({ sessions, pending, notify }) {
     const name = s ? s.name : L('ui.session');
     if (notify.type === 'done') {
       const id = `done:${notify.id}:${Date.now()}`; S.doneId[notify.id] = id;
-      island.push({ id, kind: 'success', title: L('notif.done', { name }), text: s ? doneText(s) : '', duration: 4800 });
+      const canReply = s && s.agent !== 'cursor';
+      island.push({ id, kind: 'success', title: doneTitle(s, name), text: s ? doneText(s) : '', duration: canReply ? 9000 : 4800,
+        buttons: canReply ? [{ cls: 'b-allow', icon: 'message', label: L('ui.reply'), attrs: `data-reply="${esc(s.id)}"` }] : null });
       beep([660, 880, 1100]);
     } else if (notify.type === 'waiting') {
       island.push({ id: `wait:${notify.id}:${Date.now()}`, kind: 'notification', badge: 'alert', title: L('notif.waiting', { name }), text: trClean(s && s.message, 120), duration: 7000 });
-      beep([880, 660, 880]);
-    } else if (notify.type === 'permission') { S.sel = notify.id; beep([880, 660, 880]); }
+      beep([880, 660, 880], true);
+    } else if (notify.type === 'permission' || notify.type === 'question') { S.sel = notify.id; beep([880, 660, 880], true); }
   }
-  // "bitti" bildirimindeki özet, transcript okununca güncellenir
-  for (const s of sessions) { const id = S.doneId[s.id]; if (id && island.has(id)) island.update(id, { text: doneText(s) }); }
+  for (const s of sessions) { const id = S.doneId[s.id]; if (id && island.has(id)) island.update(id, { title: doneTitle(s, s.name), text: doneText(s) }); }
 
   island.setBase(computeBase());
 }
 
-// ---------- tıklamalar (true dönerse island kendi aç/kapa davranışını atlar) ----------
 function onPointer(e) {
   const t = e.target;
+  const interactive = t.closest('[data-reply],[data-media],[data-seek],[data-qopt],[data-qsubmit],[data-act],[data-copy],[data-copypath],[data-dismiss],[data-sel],[data-tab],[data-ev],[data-toggle]');
+  if (!interactive && !widgetPointer(t)) {
+    if (!island.expanded) { window.expandSoon(); e.preventDefault(); return true; }
+  }
+  const rp = t.closest('[data-reply]');
+  if (rp) {
+    S.sel = rp.dataset.reply; S.focusReply = Date.now();
+    const done = S.doneId[rp.dataset.reply]; if (done) island.dismiss(done);
+    if (!island.expanded) window.expandSoon(); else schedule();
+    e.preventDefault(); return true;
+  }
   const mc = t.closest('[data-media]');
-  if (mc) { if (!mc.disabled) window.ccApi.media(mc.dataset.media); e.preventDefault(); return true; }
+  if (mc) {
+    if (!mc.disabled) {
+      window.ccApi.media(mc.dataset.media);
+      if (mc.dataset.media === 'toggle' && S.media && S.media.durMs) {
+        S.media.posMs = mediaPos(S.media);
+        S.media.status = S.media.status === 'Playing' ? 'Paused' : 'Playing';
+        S.media.at = Date.now();
+        syncMedia();
+      }
+    }
+    e.preventDefault(); return true;
+  }
   const sk = t.closest('[data-seek]');
   if (sk && S.media && S.media.durMs) {
     const rc = sk.getBoundingClientRect(), f = Math.min(1, Math.max(0, (e.clientX - rc.left) / rc.width));
     const ms = Math.round(f * S.media.durMs);
     window.ccApi.media('seek:' + ms);
-    S.media.posMs = ms; S.media.at = Date.now(); syncMedia(); // anında geri bildirim
+    S.media.posMs = ms; S.media.at = Date.now(); syncMedia();
     return true;
+  }
+  const qo = t.closest('[data-qopt]');
+  if (qo) { const [pid, qi, oi] = qo.dataset.qopt.split(':').map(Number); pickOption(pid, qi, oi); e.preventDefault(); return true; }
+  const qs = t.closest('[data-qsubmit]');
+  if (qs) { if (!qs.disabled) sendAnswers(+qs.dataset.qsubmit); e.preventDefault(); return true; }
+  if (widgetPointer(t)) { e.preventDefault(); return true; }
+  const nav = t.closest('[data-permnav]');
+  if (nav) { navPerm(nav.dataset.permnav === 'prev' ? -1 : 1); e.preventDefault(); return true; }
+  const bulk = t.closest('[data-bulk]');
+  if (bulk) {
+    S.pending.filter((x) => !x.questions).map((x) => x.id).forEach((id) => window.ccApi.decide(id, bulk.dataset.bulk));
+    S.permIdx = 0;
+    e.preventDefault(); return true;
   }
   const act = t.closest('[data-act]');
   if (act) { window.ccApi.decide(+act.dataset.id, act.dataset.act); e.preventDefault(); return true; }
@@ -505,11 +738,10 @@ function onPointer(e) {
   const tb = t.closest('[data-tab]'); if (tb) { if (S.tab !== tb.dataset.tab) { S.tab = tb.dataset.tab; forget('f:b:'); schedule(); } return true; }
   const ev = t.closest('[data-ev]');
   if (ev) { const key = `${S.sel}:${ev.dataset.ev}`; S.open.has(key) ? S.open.delete(key) : S.open.add(key); schedule(); return true; }
-  if (island.expanded && !t.closest('[data-toggle]')) return true; // panelin içinde boş tıklama kapatmaz; metin seçimine izin ver
+  if (island.expanded && !t.closest('[data-toggle]')) return true;
   return false;
 }
 
-// ---------- demo (tepsi menüsü): tüm durumları sırayla gösterir ----------
 let demoTimers = [];
 function runDemo() {
   demoTimers.forEach(clearTimeout); demoTimers = [];
@@ -522,7 +754,6 @@ function runDemo() {
   at(13600, () => island.push({ id: 'demo-e', kind: 'error', title: L('demo.errorTitle'), text: L('demo.errorText'), duration: 4200 }));
 }
 
-// ---------- kurulum / temizlik ----------
 let lastScroll = 0;
 const scrollAc = new AbortController();
 document.addEventListener('scroll', () => { lastScroll = Date.now(); }, { capture: true, signal: scrollAc.signal });
@@ -530,15 +761,17 @@ document.addEventListener('wheel', () => { lastScroll = Date.now(); }, { capture
 
 island = new DynamicIsland($('island'), {
   defer: () => Date.now() - lastScroll < 350,
-  render: { compact: renderCompact, overlay: renderOverlay, peek: renderPeek, full: renderFullView },
+  render: { compact: withFrame(renderCompact), overlay: withFrame(renderOverlay), peek: withFrame(renderPeek), full: withFrame(renderFullView) },
   onPointer,
   onShow: (view) => { if (view === 'peek') forget('p:'); if (view === 'full') forget('f:'); },
-  onHover: (over) => window.ccApi.mouseOver(over),
+  onHover: (over) => {
+    if (over && !island.expanded && island.cur.view === 'compact') sendSurface('peek');
+    window.ccApi.mouseOver(over);
+  },
 });
 $('fbL').innerHTML = `${claudeIcon(20)}Claude Code<small id="fbSub"></small>`;
 $('fbX').innerHTML = ic('chevron', 18).replace('<svg ', '<svg style="transform:rotate(180deg)" ');
 
-// statik metinleri (aria/title) seçili dile çevirir
 function applyStaticI18n() {
   document.documentElement.lang = I18N.lang;
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => el.setAttribute('aria-label', L(el.dataset.i18nAria)));
@@ -546,21 +779,62 @@ function applyStaticI18n() {
 }
 
 window.ccApi.onSettings((s) => {
+  S.settings = s;
   I18N.setLang(s.lang || 'en');
+  S.sound = s.sound || 'on';
   applyStaticI18n();
   island.setMotionMode(s.motion || 'on');
+  island.setShape(s.shape || 'notch');
+  const legacy = s.radius != null ? s.radius : 100;
+  island.setRadii({ compact: s.radiusCompact ?? legacy, overlay: s.radiusOverlay ?? legacy, peek: s.radiusPeek ?? legacy, full: s.radiusFull ?? legacy });
+  const root = document.documentElement.style;
+  root.setProperty('--notch-h', (s.notchHeight || 34) + 'px');
+  root.setProperty('--notch-w', (s.notchWidth || 104) + 'px');
+  root.setProperty('--notch-label', (s.notchLabel || 150) + 'px');
+  document.documentElement.dataset.pet = s.pet === 'off' ? 'off' : 'on';
   schedule();
 });
+if (window.ccApi.onPermNav) window.ccApi.onPermNav((d) => navPerm(d === 'prev' ? -1 : 1));
 window.ccApi.onState(onState);
+if (window.ccApi.onGame) window.ccApi.onGame((v) => { S.game = !!v; });
 window.ccApi.onMedia(onMedia);
 window.ccApi.onDemo(runDemo);
+if (window.ccApi.onOpenFull) window.ccApi.onOpenFull(() => window.expandSoon());
+if (window.ccApi.onToggleFull) window.ccApi.onToggleFull(() => { island.expanded ? island.collapse() : window.expandSoon(); });
+initSurfaceObserver();
+
+if (window.ccApi.getThemeInfo) {
+  window.ccApi.getThemeInfo().then((t) => { if (t) { S.themeInfo = t; schedule(); } });
+}
+if (window.ccApi.onThemeChanged) {
+  window.ccApi.onThemeChanged((t) => { if (t) { S.themeInfo = t; schedule(); } });
+}
+if (window.ccApi.onCalendar) {
+  window.ccApi.onCalendar((c) => { S.calendar = c; schedule(); });
+}
+if (window.ccApi.onTimer) {
+  window.ccApi.onTimer((t) => { S.timer = t; schedule(); });
+}
+let usageBusy = false;
+function loadUsage() {
+  if (usageBusy || !window.ccApi.getUsage) return;
+  usageBusy = true;
+  window.ccApi.getUsage().then((u) => { usageBusy = false; if (u) { S.usage = u; schedule(); } }, () => { usageBusy = false; });
+}
+loadUsage();
+
 applyStaticI18n();
 
+document.documentElement.classList.add('cc-boot');
+setTimeout(() => document.documentElement.classList.remove('cc-boot'), 900);
+
 const tickId = setInterval(() => {
+  if (document.hidden) return;
   const now = Date.now();
   document.querySelectorAll('[data-since]').forEach((e) => (e.textContent = fmt(now - +e.dataset.since)));
   document.querySelectorAll('[data-done]').forEach((e) => (e.textContent = ago(now - +e.dataset.done)));
 }, 1000);
-const mediaId = setInterval(syncMedia, 500);
+const mediaId = setInterval(() => { if (!document.hidden && S.media) syncMedia(); }, 500);
 const dataId = setInterval(() => { if (island.expanded && S.tab !== 'act') ensureData(); }, 2500);
-window.addEventListener('beforeunload', () => { clearInterval(tickId); clearInterval(dataId); clearInterval(mediaId); demoTimers.forEach(clearTimeout); clearTimeout(musicTimer); island.destroy(); scrollAc.abort(); });
+const usageId = setInterval(() => { if (island.expanded) loadUsage(); }, 60000);
+window.addEventListener('beforeunload', () => { clearInterval(tickId); clearInterval(dataId); clearInterval(mediaId); clearInterval(usageId); demoTimers.forEach(clearTimeout); clearTimeout(musicTimer); island.destroy(); scrollAc.abort(); });

@@ -1,5 +1,7 @@
 # build output
 dist/
+ui/
+bin/
 
 # dependencies
 node_modules/
