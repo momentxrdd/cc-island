@@ -1,6 +1,10 @@
-# Spotify medya izleyici (Windows SMTC). stdout: JSON satırları, stdin: komutlar (toggle|play|pause|next|prev|seek:<ms>|quit)
+param([string]$Source = 'spotify')
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+
+try { (Get-Process -Id $PID).PriorityClass = 'BelowNormal' } catch {}
+Add-Type -Namespace CcUtil -Name Proc -MemberDefinition '[DllImport("psapi.dll")] public static extern bool SetProcessWorkingSetSize(IntPtr h, int min, int max);'
+function Trim-WS { try { [void][CcUtil.Proc]::SetProcessWorkingSetSize([System.Diagnostics.Process]::GetCurrentProcess().Handle, -1, -1) } catch {} }
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 Add-Type -AssemblyName System.Drawing
 
@@ -22,7 +26,17 @@ $asStreamForRead = [System.IO.WindowsRuntimeStreamExtensions].GetMethods() | Whe
 $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 if (-not $mgr) { [Console]::Out.WriteLine('{"none":true,"error":"smtc"}'); exit 1 }
 
-function Emit($o) { [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress -Depth 4)); [Console]::Out.Flush() }
+function App-Name($id) {
+  $n = [string]$id
+  if ($n -match '!') { $n = $n.Split('!')[-1] }
+  $n = ($n -replace '\.exe$', '').Split('\')[-1].Split('.')[-1]
+  if ($n -match '^[0-9A-F]{16}$') { return 'Firefox' }
+  if ($n -match '^msedge$') { return 'Edge' }
+  if ($n -match '^chrome$') { return 'Chrome' }
+  return $n
+}
+
+function Emit($o) { $script:lastEmitAt = [DateTimeOffset]::UtcNow; [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress -Depth 4)); [Console]::Out.Flush() }
 
 function Get-Art($props) {
   try {
@@ -45,13 +59,13 @@ function Get-Art($props) {
 
 $session = $null
 $lastKey = ''; $lastEmit = 0; $lastPoll = 0; $artVer = 0; $hadSession = $false
-# Console.In.ReadLineAsync() .NET Framework'te eşzamanlıdır; gerçek async için StreamReader kullan
+$lastEmitAt = [DateTimeOffset]::UtcNow; $trimAt = [DateTimeOffset]::UtcNow.AddSeconds(60)
+$missStreak = 0; $missGrace = 3
 $stdin = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
 $cmdTask = $stdin.ReadLineAsync()
 $epoch = [DateTimeOffset]::new(1970, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
 
 while ($true) {
-  # ---- komutlar ----
   if ($cmdTask.IsCompleted) {
     $line = $cmdTask.Result
     if ($null -eq $line) { break }
@@ -69,23 +83,29 @@ while ($true) {
           '^seek:(\d+)$' { [void](Await ($session.TryChangePlaybackPositionAsync([long]$Matches[1] * 10000)) ([bool])) }
         }
       } catch {}
-      $lastPoll = 0  # komuttan hemen sonra durumu yenile
+      $lastPoll = 0
     }
   }
 
-  # ---- durum yoklama (1 sn) ----
   $now = [DateTimeOffset]::UtcNow
   $nowMs = [long]($now - $epoch).TotalMilliseconds
   if ($nowMs - $lastPoll -ge 1000) {
     $lastPoll = $nowMs
     $session = $null
     try {
-      foreach ($s in $mgr.GetSessions()) { if ($s.SourceAppUserModelId -match 'Spotify') { $session = $s; break } }
+      if ($Source -eq 'all') {
+        foreach ($s in $mgr.GetSessions()) { if ([string]$s.GetPlaybackInfo().PlaybackStatus -eq 'Playing') { $session = $s; break } }
+        if (-not $session) { $session = $mgr.GetCurrentSession() }
+      } else {
+        foreach ($s in $mgr.GetSessions()) { if ($s.SourceAppUserModelId -match 'Spotify') { $session = $s; break } }
+      }
     } catch {}
 
     if (-not $session) {
-      if ($hadSession) { Emit @{ none = $true }; $hadSession = $false; $lastKey = '' }
+      $missStreak++
+      if ($hadSession -and $missStreak -ge $missGrace) { Emit @{ none = $true }; $hadSession = $false; $lastKey = ''; $missStreak = 0 }
     } else {
+      $missStreak = 0
       $hadSession = $true
       $props = Await ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
       $info = $session.GetPlaybackInfo()
@@ -101,7 +121,7 @@ while ($true) {
       $changed = ($key -ne $lastKey)
       if ($changed -or ($nowMs - $lastEmit -ge 5000)) {
         $o = @{
-          app = 'Spotify'; title = [string]$props.Title; artist = [string]$props.Artist; album = [string]$props.AlbumTitle
+          app = (App-Name $session.SourceAppUserModelId); title = [string]$props.Title; artist = [string]$props.Artist; album = [string]$props.AlbumTitle
           status = $status; posMs = [long]$pos; durMs = $durMs; at = $nowMs
           canPrev = [bool]$info.Controls.IsPreviousEnabled; canNext = [bool]$info.Controls.IsNextEnabled; canSeek = [bool]$info.Controls.IsPlaybackPositionEnabled
         }
@@ -112,9 +132,15 @@ while ($true) {
         }
         $o.artVer = $artVer
         Emit $o
+        if ($o.art) { Trim-WS }
         $lastKey = $key; $lastEmit = $nowMs
       }
     }
+  }
+  $nowD = [DateTimeOffset]::UtcNow
+  if ($nowD -ge $trimAt) {
+    $trimAt = $nowD.AddSeconds(60)
+    if (($nowD - $lastEmitAt).TotalSeconds -ge 45) { Trim-WS }
   }
   Start-Sleep -Milliseconds 120
 }

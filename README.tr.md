@@ -37,7 +37,13 @@
 - **İzin onayları.** Claude Code izin istediğinde ada, çalıştırmak istediği komutu ya da düzenlemeyi göstererek genişler. Onayla, reddet, Claude Code bir kural önerdiyse "her zaman izin ver" ya da terminale bırak. Kısayollar: onaylamak için `Ctrl+Alt+Y`, reddetmek için `Ctrl+Alt+N`.
 - **Bildirimler.** Bir oturum bittiğinde, girdi istediğinde ya da hata verdiğinde kısa ve animasyonlu uyarılar. Başarı ve hata durumları ne olduğunu gösterir.
 - **Tam oturum görünümü.** Adaya tıklayınca araç etkinliğini, girdileri, diff'leri ve çıktıları, Claude'un son mesajını, `TodoWrite` görev listesini, konuşmayı, token kullanımını ve değiştirilen dosyaları görürsün.
-- **Spotify.** Albüm kapaklı şimdi çalıyor kartı, tıklayarak ileri sarılabilen ilerleme çubuğu ve önceki / oynat-duraklat / sonraki düğmeleri. Parça değişince kısa bir bildirim çıkar.
+- **Soruları adadan cevapla.** Claude Code `AskUserQuestion` ile soru sorduğunda seçenekler adada çıkar; birini seçmek cevabı gönderir (çoklu seçim de olur).
+- **Müzik.** Albüm kapaklı şimdi çalıyor kartı, tıklayarak ileri sarılabilen ilerleme çubuğu ve önceki / oynat-duraklat / sonraki düğmeleri. Yalnızca Spotify'ı ya da çalan herhangi bir oynatıcıyı izleyebilir.
+- **Bugün paneli.** Tam görünümde takvim, zamanlayıcı ve Claude kullanımı bir arada.
+- **Takvim.** Google / Outlook / iCloud takviminin gizli iCal linkiyle bugünün ve yarının etkinlikleri. Toplantıdan 15 dk önce kapsülde geri sayım, 10 dk önce ve başlarken uyarı, Meet / Zoom / Teams linkleri için "Katıl" düğmesi.
+- **Zamanlayıcı (Pomodoro).** 25 / 50 dk odak, 5 dk mola; odak bitince mola kendiliğinden başlar (her 4. mola 15 dk). Kalan süre kapsülde halkalı bir çiple görünür.
+- **Claude kullanımı.** Bugün ve son 7 gün için token sayıları, API fiyatlarıyla tahmini maliyet, günlük grafik, en çok kullanılan projeler ve modeller. Claude Code'un yerel transcript dosyalarından hesaplanır.
+- **Sistem göstergeleri.** Ses ya da parlaklık değişince iOS tarzı gösterge, şarj takılıp çıkarılınca pil göstergesi, %20 / %10 / %5'te düşük pil uyarısı.
 - **Otomatik.** Ada, bir Claude Code oturumu başlayınca açılır, oturum yokken gizlenir ve bu şekilde açıldıysa bir süre sonra kendini kapatır.
 - **İngilizce ve Türkçe.** Varsayılan olarak sistem diline uyar; tepsi menüsünden değiştirebilirsin.
 - **Erişilebilir hareket.** Animasyonlar Windows'un "Animasyon efektleri" ayarını izleyebilir ya da tepsi menüsünden tamamen kapatılabilir.
@@ -95,7 +101,8 @@ Spotify ──Windows medya oturumu──▶ media.ps1 ──▶ media.js ──
 
 ## Gizlilik
 
-- Her şey kendi bilgisayarında kalır. Ada yalnızca `127.0.0.1`'e bağlı bir sunucuyla konuşur ve kendi başına ağ isteği yapmaz.
+- Her şey kendi bilgisayarında kalır. Ada yalnızca `127.0.0.1`'e bağlı bir sunucuyla konuşur. Tek istisna takvimdir: bir iCal linki bağlarsan ada o linki 10 dakikada bir indirir. Link ayarlar dosyasında saklanır ve sayfaya gönderilmez.
+- Kullanım özeti `~/.claude/projects` altındaki transcript dosyalarını yalnızca okur; maliyet, API fiyatlarıyla yapılmış bir tahmindir (abonelikle kullanıyorsan gerçek faturan değildir).
 - Konuşmaları ve token sayılarını göstermek için Claude Code'un yerel olarak yazdığı transcript dosyalarını okur (yolu hook verisinde gelir).
 - Ayarlar Electron'un kullanıcı veri klasöründe (`%APPDATA%\cc-island\settings.json`) saklanır.
 
@@ -107,6 +114,13 @@ Tepsi simgesine sağ tıkla:
 | --- | --- |
 | Dil | Otomatik (sistem), English, Türkçe |
 | Animasyonlar | Her zaman açık, Windows ayarını izle, Kapalı |
+| Sesler | Tüm uyarılar, Yalnızca onaylar ve sorular, Kapalı |
+| Müzik kartı | Yalnızca Spotify, Herhangi bir oynatıcı, Kapalı |
+| Ekran | Ana monitör, Farenin olduğu monitör |
+| Sistem göstergeleri | Ses / parlaklık / pil göstergeleri açık ya da kapalı |
+| Windows ile başlat | Oturum açınca adayı başlatır (takvim uyarıları için) |
+| Zamanlayıcı | Odak 25 / 50 dk, Mola 5 dk, Duraklat, Durdur |
+| Takvim | Panodaki iCal linkini kullan, Şimdi yenile, Bağlantıyı kaldır |
 
 "Demo: tüm durumları göster" seçeneği, adanın tüm durumlarını sırayla gösterir.
 

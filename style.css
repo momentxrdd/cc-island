@@ -12,39 +12,10 @@ html, body { height: 100%; background: transparent; overflow: hidden; color: var
   font: 13px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
 #wrap { display: flex; justify-content: center; }
 .ico { flex: none; vertical-align: middle; }
-.sel-ok, pre, .say, .msg .tx, .kv .v, .out, .code { user-select: text; }
+pre, .say, .msg .tx, .kv .v, .out, .code { user-select: text; }
 
-/* ================= notch ================= */
-#notch {
-  background: var(--bg); overflow: hidden; width: 190px; position: relative;
-  border-radius: 0 0 20px 20px; box-shadow: 0 12px 34px rgba(0,0,0,.6);
-  transition: width .6s var(--spring), border-radius .6s var(--spring), transform .35s var(--spring), box-shadow .4s;
-}
-#notch.mode-peek { width: 440px; border-radius: 0 0 30px 30px; }
-#notch.mode-full { width: 900px; border-radius: 0 0 38px 38px; }
-#notch.bump { transform: scale(1.07); }
-#notch.alert { box-shadow: 0 12px 34px rgba(0,0,0,.6), 0 0 0 1.5px var(--amber), 0 0 28px rgba(255,214,10,.4); animation: glow 1.6s ease-in-out infinite; }
-@keyframes glow { 50% { box-shadow: 0 12px 34px rgba(0,0,0,.6), 0 0 0 1.5px var(--amber), 0 0 46px rgba(255,214,10,.65); } }
-
-/* çalışırken altta akan ışık çizgisi */
-#shim { position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0; transition: opacity .4s; overflow: hidden; pointer-events: none; }
-#shim::before { content: ""; position: absolute; inset: 0; width: 45%;
-  background: linear-gradient(90deg, transparent, var(--orange), #ffd9a8, var(--orange), transparent); animation: slide 1.8s linear infinite; }
-#notch.working #shim { opacity: 1; }
-#notch.alert #shim::before { background: linear-gradient(90deg, transparent, var(--amber), #fff3a0, var(--amber), transparent); animation-duration: .9s; }
 @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
 
-#bar { display: flex; align-items: center; justify-content: center; gap: 10px; height: 34px; padding: 0 14px; cursor: pointer; }
-.mode-peek #bar, .mode-full #bar { justify-content: space-between; height: 40px; padding: 0 18px; }
-#left { display: flex; align-items: center; gap: 8px; flex: none; }
-#label { font-weight: 600; white-space: nowrap; display: flex; align-items: center; gap: 7px; overflow: hidden; }
-#label.swap { animation: swap .45s var(--spring); }
-@keyframes swap { from { opacity: 0; transform: translateY(8px) scale(.94); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
-#right { color: var(--dim); font-size: 12px; white-space: nowrap; display: none; align-items: center; gap: 8px; }
-.mode-peek #right, .mode-full #right { display: flex; }
-#dots { display: flex; gap: 5px; align-items: center; }
-
-/* ekolayzır */
 .eq { display: inline-flex; gap: 2px; align-items: center; height: 14px; }
 .eq i { width: 3px; border-radius: 2px; background: var(--orange); animation: eq 1s ease-in-out infinite; }
 .eq i:nth-child(1) { height: 6px; animation-delay: -.2s; } .eq i:nth-child(2) { height: 12px; animation-delay: -.5s; }
@@ -52,7 +23,6 @@ html, body { height: 100%; background: transparent; overflow: hidden; color: var
 @keyframes eq { 50% { transform: scaleY(.3); } }
 .eq { align-items: center; } .eq i { transform-origin: center; }
 
-/* durum noktası + dalga halkası */
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; position: relative; }
 .dot.working { background: var(--orange); } .dot.waiting { background: var(--amber); } .dot.done { background: var(--green); }
 .dot.working::after, .dot.waiting::after { content: ""; position: absolute; inset: -1px; border-radius: 50%; border: 2px solid currentColor;
@@ -62,7 +32,6 @@ html, body { height: 100%; background: transparent; overflow: hidden; color: var
 .dot.done { animation: pop .5s var(--spring); }
 @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
 
-/* tik çizimi */
 .tick path, .tick circle { stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw .6s .1s ease-out forwards; }
 .tick circle { animation-delay: 0s; stroke-dasharray: 70; stroke-dashoffset: 70; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
@@ -71,22 +40,9 @@ html, body { height: 100%; background: transparent; overflow: hidden; color: var
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ================= yaylı bölümler ================= */
-.collapse { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .65s var(--spring), opacity .3s; }
-.inner { overflow: hidden; min-height: 0; }
-.mode-peek #peekWrap, .mode-full #fullWrap { grid-template-rows: 1fr; opacity: 1; }
-
-/* giriş animasyonu (yalnızca yeni öğeler) */
 .enter { animation: enter .55s var(--spring) both; animation-delay: var(--d, 0ms); }
 @keyframes enter { from { opacity: 0; transform: translateY(14px) scale(.96); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
-.enter-l { animation: enterl .5s var(--spring) both; animation-delay: var(--d, 0ms); }
-@keyframes enterl { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
-.flash { animation: flash 1s ease-out; }
-@keyframes flash { from { background: rgba(255,159,67,.3); } to { background: transparent; } }
 
-/* ================= peek ================= */
-#peek { padding: 0 12px; }
-.mode-peek #peek { padding: 2px 12px 12px; }
 .hint { color: var(--dim); font-size: 11px; text-align: center; padding-top: 8px; display: flex; justify-content: center; align-items: center; gap: 6px; }
 .empty { color: var(--dim); text-align: center; padding: 22px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .empty .ico { opacity: .5; }
@@ -99,7 +55,6 @@ html, body { height: 100%; background: transparent; overflow: hidden; color: var
 .sub code { font-family: var(--mono); color: #c4c4ca; overflow: hidden; text-overflow: ellipsis; }
 .time { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; flex: none; }
 
-/* araç ikon rozeti */
 .ticon { display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; flex: none; }
 .c-orange { background: rgba(255,159,67,.16); color: var(--orange); } .c-blue { background: rgba(100,168,255,.16); color: var(--blue); }
 .c-green { background: rgba(50,215,75,.16); color: var(--green); } .c-purple { background: rgba(191,139,255,.16); color: var(--purple); }
@@ -107,7 +62,6 @@ html, body { height: 100%; background: transparent; overflow: hidden; color: var
 .c-pink { background: rgba(255,126,182,.16); color: var(--pink); } .c-amber { background: rgba(255,214,10,.15); color: var(--amber); }
 .c-gray { background: rgba(142,142,147,.16); color: #b5b5ba; }
 
-/* ================= izin kartı ================= */
 .perm { background: linear-gradient(180deg, #1c1700, #111113 70%); border: 1px solid #5a4a06; border-radius: 18px; padding: 12px 14px; margin: 4px 0 10px; }
 .perm-h { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
 .perm-h .lk { color: var(--amber); display: flex; }
@@ -115,21 +69,45 @@ html, body { height: 100%; background: transparent; overflow: hidden; color: var
 .perm pre { font: 12px/1.5 var(--mono); color: #d6d6db; background: #070708; border-radius: 12px; padding: 9px 11px;
   max-height: 150px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-bottom: 10px; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
-button { font: inherit; font-weight: 600; border: 0; border-radius: 13px; padding: 8px 14px; cursor: pointer; color: #fff; position: relative; overflow: hidden;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: transform .2s var(--spring), filter .2s; }
-button::after { content: ""; position: absolute; top: 0; left: -80%; width: 50%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.28), transparent);
-  transform: skewX(-20deg); transition: left .5s; }
-button:hover { filter: brightness(1.12); transform: translateY(-1px) scale(1.04); }
-button:hover::after { left: 130%; }
-button:active { transform: scale(.94); }
+button { font: inherit; white-space: nowrap; font-weight: 500; border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; color: #fff; position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s ease, opacity .15s ease, border-color .15s ease; }
+button::after { display: none !important; }
+button:hover { filter: none !important; transform: none !important; }
+button:active { opacity: .88; transform: scale(.98); }
 .b-allow { background: #1f8f3a; flex: 1; min-width: 100px; } .b-deny { background: #b3261e; flex: 1; min-width: 100px; }
 .b-always { background: #1d5f9e; } .b-ghost { background: var(--card3); color: #b5b5ba; font-weight: 500; }
 .keys { color: var(--dim); font-size: 11px; margin-top: 8px; display: flex; gap: 12px; }
 kbd { background: var(--card3); border-radius: 5px; padding: 0 5px; font: 11px var(--mono); color: #c4c4ca; }
+button:disabled { opacity: .4; cursor: default; filter: none; transform: none; }
+button:disabled::after { display: none; }
+.push { margin-left: auto; }
 
-/* ================= tam panel ================= */
+.perm.qcard { background: linear-gradient(180deg, #0b1626, #111113 70%); border-color: #1f3a5c; }
+.qcard .perm-h .lk { color: var(--blue); }
+.q + .q { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.q-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.q-chip { background: rgba(100,168,255,.16); color: var(--blue); border-radius: 8px; padding: 1px 8px; font-size: 11px; font-weight: 650; }
+.q-hint { color: var(--dim); font-size: 11px; }
+.q-t { font-weight: 600; font-size: 13.5px; line-height: 1.45; margin-bottom: 8px; user-select: text; }
+.q-opts { display: flex; flex-direction: column; gap: 5px; }
+.qopt { display: flex; justify-content: flex-start; align-items: flex-start; gap: 10px; width: 100%; text-align: left; padding: 8px 11px; border-radius: 12px;
+  background: var(--card2); color: var(--txt); font-weight: 500; box-shadow: inset 0 0 0 1px var(--line); transition: background .2s, box-shadow .2s, transform .2s var(--spring); }
+.qopt:hover { background: var(--card3); filter: none; transform: translateX(2px); }
+.qopt::after { display: none; }
+.qopt.on { background: rgba(100,168,255,.13); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.qx { width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; border: 1.5px solid var(--dim2); flex: none; display: flex; align-items: center; justify-content: center; color: #000;
+  transition: background .2s, border-color .2s; }
+.qopt.multi .qx { border-radius: 5px; }
+.qopt.on .qx { background: var(--blue); border-color: var(--blue); }
+.ql { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ql b, .ql small { overflow-wrap: anywhere; }
+.ql b { font-weight: 600; font-size: 12.5px; }
+.ql small { color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.q-btns { margin-top: 10px; }
+.q-btns .b-allow { background: #1d5f9e; }
+
 .fullgrid { display: grid; grid-template-columns: 220px 1fr; gap: 12px; padding: 4px 16px 18px; height: 600px; }
-.side { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 2px; }
+.side { overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 4px; padding-right: 2px; }
 .sitem { display: flex; gap: 10px; align-items: center; padding: 10px 11px; border-radius: 16px; cursor: pointer; position: relative; transition: background .2s, transform .25s var(--spring); }
 .sitem:hover { background: var(--card2); transform: translateX(3px); }
 .sitem.sel { background: var(--card2); box-shadow: inset 0 0 0 1px var(--line); }
@@ -149,7 +127,6 @@ kbd { background: var(--card3); border-radius: 5px; padding: 0 5px; font: 11px v
 .ibtn:hover { background: var(--card3); color: #fff; transform: scale(1.12); }
 .ibtn.red:hover { color: var(--red); }
 
-/* görevler */
 .todos { background: var(--card2); border-radius: 14px; padding: 9px 12px; }
 .todos .hd { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 7px; }
 .pbar { height: 4px; background: var(--card3); border-radius: 3px; overflow: hidden; flex: 1; }
@@ -161,25 +138,22 @@ kbd { background: var(--card3); border-radius: 5px; padding: 0 5px; font: 11px v
 .td.in_progress .tx { color: #fff; font-weight: 600; }
 @keyframes pulse { 50% { transform: scale(1.7); opacity: .5; } }
 
-/* sekmeler */
 .tabs { display: flex; gap: 2px; position: relative; border-bottom: 1px solid var(--line); flex: none; }
 .tab { padding: 8px 14px; color: var(--dim); cursor: pointer; display: flex; align-items: center; gap: 7px; font-weight: 600; transition: color .2s; }
 .tab:hover { color: #ddd; } .tab.on { color: #fff; }
 .tab .n { background: var(--card3); border-radius: 8px; padding: 0 6px; font-size: 11px; color: var(--dim); }
 .tabs .ind { position: absolute; bottom: -1px; height: 2px; border-radius: 2px; background: var(--orange); transition: left .45s var(--spring), width .45s var(--spring); }
-.tabbody { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 2px 16px; display: flex; flex-direction: column; gap: 10px; }
+.tabbody { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; padding: 4px 2px 16px; display: flex; flex-direction: column; gap: 10px; }
 .side::-webkit-scrollbar, .tabbody::-webkit-scrollbar, .perm pre::-webkit-scrollbar, .say::-webkit-scrollbar, .out::-webkit-scrollbar, .code::-webkit-scrollbar { width: 6px; height: 6px; }
 .side::-webkit-scrollbar-thumb, .tabbody::-webkit-scrollbar-thumb, .perm pre::-webkit-scrollbar-thumb, .say::-webkit-scrollbar-thumb, .out::-webkit-scrollbar-thumb, .code::-webkit-scrollbar-thumb { background: #3a3a3f; border-radius: 3px; }
 
-/* şu an */
 .cur { background: var(--card2); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; position: relative; overflow: hidden; }
 .cur::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 40%; background: linear-gradient(90deg, transparent, var(--orange), transparent); animation: slide 1.6s linear infinite; }
 .cur .tx { min-width: 0; flex: 1; }
 .cur .tx b { display: block; } .cur .tx code { font: 12px var(--mono); color: #c4c4ca; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .sec { color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-.say { background: var(--card2); border-radius: 14px; padding: 11px 13px; max-height: 150px; overflow-y: auto; line-height: 1.5; white-space: pre-wrap; color: #e6e6ea; }
+.say { background: var(--card2); border-radius: 14px; padding: 11px 13px; max-height: 150px; overflow-y: auto; overflow-x: hidden; line-height: 1.5; white-space: pre-wrap; color: #e6e6ea; }
 
-/* etkinlik akışı */
 .feed { display: flex; flex-direction: column; gap: 3px; }
 .ev { border-radius: 12px; transition: background .2s; }
 .ev:hover { background: var(--card2); }
@@ -202,10 +176,8 @@ kbd { background: var(--card3); border-radius: 5px; padding: 0 5px; font: 11px v
 .lbl .ibtn { padding: 2px 4px; margin-left: auto; }
 .df .del { color: #ff8a80; background: rgba(255,69,58,.12); display: block; } .df .add { color: #8ff0a4; background: rgba(50,215,75,.12); display: block; }
 .kvs { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 12px; }
-.kv .k, .kvs .k { color: var(--dim); } .kvs .v { color: #ddd; word-break: break-all; font-family: var(--mono); }
-.dur { color: var(--dim2); font-size: 11px; }
+.kvs .k { color: var(--dim); } .kvs .v { color: #ddd; word-break: break-all; font-family: var(--mono); }
 
-/* konuşma */
 .msg { display: flex; gap: 10px; }
 .msg .av { width: 26px; height: 26px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex: none; margin-top: 1px; }
 .msg.user .av { background: rgba(100,168,255,.16); color: var(--blue); } .msg.assistant .av { background: rgba(255,159,67,.16); color: var(--orange); }
@@ -217,7 +189,6 @@ kbd { background: var(--card3); border-radius: 5px; padding: 0 5px; font: 11px v
 .tchip { display: inline-flex; align-items: center; gap: 6px; background: var(--card2); border-radius: 9px; padding: 3px 9px 3px 5px; font-size: 11.5px; max-width: 100%; }
 .tchip code { font-family: var(--mono); color: var(--dim); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* genel */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .tile { background: var(--card2); border-radius: 14px; padding: 10px 12px; }
 .tile .k { color: var(--dim); font-size: 11px; display: flex; gap: 5px; align-items: center; }
